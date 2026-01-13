@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* Custom Animation from Permission-Lab */
+@keyframes scan {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+.animate-scan {
+  animation: scan 2s linear infinite;
+}
+
+body {
+  background-color: #0f172a; /* This is bg-slate-900 */
+  color: white;
+  font-family: ui-sans-serif, system-ui, sans-serif; /* This is font-sans */
+  -webkit-font-smoothing: antialiased; /* This is antialiased */
+  -moz-osx-font-smoothing: grayscale;
+}
