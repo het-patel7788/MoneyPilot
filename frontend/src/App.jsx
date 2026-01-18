@@ -1,61 +1,47 @@
-import React, { useState, useEffect } from 'react'; // 1. Import Hooks
-import axios from 'axios'; // 2. Import Axios
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import Dashboard from './pages/Dashboard';
 
-function App() {
-  // 3. Create State to hold the money
-  const [netWorth, setNetWorth] = useState(0); 
-
-  // 4. Fetch data when app loads
-  useEffect(() => {
-    axios.get('http://localhost:5000/api/stats')
-      .then((response) => {
-        // When data arrives, update the state
-        console.log("Data received:", response.data);
-        setNetWorth(response.data.netWorth);
-      })
-      .catch((error) => {
-        console.error("Error fetching data:", error);
-      });
-  }, []);
-
+const Layout = () => {
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col">
-
       <Header />
-
-      <div className="flex flex-1 pt-24 mb-20 max-w-7xl mx-auto w-full">
-        <aside className="w-24 md:w-32 flex-none hidden md:block">
-          <div className="sticky top-28 flex justify-center">
-            <Sidebar />
-          </div>
+      
+      <div className="flex flex-1 max-w-7xl mx-auto w-full pt-24 pb-10 relative">
+        
+        {/* SIDEBAR COLUMN: z-[40] ensures it sits ABOVE the Main Content (z-0) */}
+        <aside className="hidden md:block w-20 flex-none relative z-[40]">
+           <div className="sticky top-28 h-fit">
+             <Sidebar />
+           </div>
         </aside>
 
-        <main className="flex-1 px-6 min-h-[100vh]">
-          
-          <h1 className="text-4xl font-bold mb-2">
-            Hello, <span className="text-emerald-400">Pilot</span> ✈️
-          </h1>
-          <p className="text-gray-400">Welcome back to your cockpit.</p>
-
-          <div className="mt-8 p-8 rounded-2xl bg-slate-800/50 border border-white/5 w-full max-w-md backdrop-blur-sm">
-            <h3 className="text-gray-400 text-sm font-medium uppercase tracking-wider">Total Net Worth</h3>
-            
-            {/* 5. Display the REAL data (with formatting) */}
-            <p className="text-5xl font-bold text-emerald-400 mt-2 drop-shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              $ {netWorth.toLocaleString()}
-            </p>
-          </div>
-
+        {/* MAIN CONTENT: z-0 ensures it stays BELOW the sidebar */}
+        <main className="flex-1 px-6 min-h-[60vh] relative z-0">
+          <Routes>
+            <Route path="/" element={<Dashboard walletType="home" />} />
+            <Route path="/business" element={<Dashboard walletType="business" />} />
+            <Route path="/travel" element={<Dashboard walletType="travel" />} />
+          </Routes>
         </main>
-
       </div>
 
-      <Footer />
-      
+      {/* FOOTER: z-[50] ensures it sits ABOVE the Sidebar (z-40) */}
+      <div className="relative z-[50] bg-[#0f172a]">
+        <Footer />
+      </div>
     </div>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <Layout />
+    </Router>
   );
 }
 

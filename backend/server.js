@@ -18,14 +18,27 @@ mongoose.connect(process.env.MONGO_URI)
 
 app.get('/', (req, res) => res.send('MoneyPilot Online ✈️'));
 
+// GET Stats (Smart Filter)
 app.get('/api/stats', async (req, res) => {
   try {
-    const transactions = await Transaction.find();
+    const walletType = req.query.wallet; // Check if frontend sent ?wallet=business
+    
+    let query = {};
+    // If a specific wallet is requested, filter by it. 
+    // If NO wallet is requested (Wallet 0), query stays empty {} (Find All)
+    if (walletType && walletType !== 'home') {
+      query = { wallet: walletType };
+    }
+
+    // 1. Get transactions based on the filter
+    const transactions = await Transaction.find(query).sort({ createdAt: -1 });
+    
+    // 2. Calculate Total for THIS view only
     const totalAmount = transactions.reduce((acc, item) => acc + item.amount, 0);
 
     res.json({ 
       netWorth: totalAmount, 
-      count: transactions.length 
+      transactions: transactions 
     });
   } catch (error) {
     res.status(500).json({ error: 'Server Error' });
