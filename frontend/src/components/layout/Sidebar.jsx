@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Briefcase, Plane, Plus, ChevronRight, LayoutDashboard, History, StickyNote, Wallet } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';  
-import AddWalletModal from './AddWalletModal';
+import { motion, AnimatePresence } from 'framer-motion';  //for animation
+import AddWalletModal from '../transactions/AddWalletModal';
 
 const Sidebar = () => {
   const location = useLocation();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);  //open the popup
+  const [isHovered, setIsHovered] = useState(false);  //hover the sidebar
 
   const iconMap = { Home, Briefcase, Plane, Wallet };
 
@@ -166,7 +166,7 @@ const Sidebar = () => {
             })}
           </div>
 
-          <div className="w-full h-[1px] bg-white/10 my-1 opacity-50 flex-shrink-0" />
+          <div className="w-full h-[1px] bg-white/10 my-1 opacity-50 flex-shrink-0 mb-3" />
 
           <button
             onClick={() => setIsModalOpen(true)}
@@ -209,7 +209,7 @@ const Sidebar = () => {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 255, 255, 0.4);
         }
-      `}</style>  
+      `}</style>
     </>
   );
 };
