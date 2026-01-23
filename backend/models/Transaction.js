@@ -15,6 +15,11 @@ const TransactionSchema = new mongoose.Schema({
     required: true,
     default: 'personal'
   },
+  category: {
+    type: String,
+    required: false,
+    default: 'General' 
+  },
   createdAt: {
     type: Date,
     default: Date.now
