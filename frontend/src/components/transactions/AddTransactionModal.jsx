@@ -55,6 +55,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
         amount: finalAmount,
         wallet: targetWallet,
         category: category || 'General',
+        date: date
         // We aren't sending date yet because the Backend Schema didn't ask for it specifically, 
         // but it will auto-add "createdAt". We can add date later.
       });

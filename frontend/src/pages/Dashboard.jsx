@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import axios from 'axios'; // We need this to fetch data
+import axios from 'axios';
 import { Plus } from 'lucide-react';
 import TransactionList from '../components/transactions/TransactionList';
 import AddTransactionModal from '../components/transactions/AddTransactionModal';
 
-const Dashboard = ({ walletType }) => { // 1. REMOVED 'transactions' from props
-  
-  // 2. STATE: Dashboard now owns the real data
+const Dashboard = ({ walletType }) => {
+  // STATE
   const [netWorth, setNetWorth] = useState(0);
   const [transactions, setTransactions] = useState([]); 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,31 +23,43 @@ const Dashboard = ({ walletType }) => { // 1. REMOVED 'transactions' from props
 
   const currentTheme = themes[walletType] || themes.home;
 
-  // 3. FETCH: The Engine that gets data from MongoDB
-  const fetchStats = async () => {
+  // FETCH FUNCTION (Wrapped in useCallback)
+  const fetchStats = useCallback(async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      // Call the backend
       const response = await axios.get(`${API_URL}/api/stats?wallet=${walletType}`);
       
-      // Update the UI with Real Data
       setNetWorth(response.data.netWorth);
       setTransactions(response.data.transactions);
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
-  };
-
-  // Run this when the wallet changes (Home -> Business)
-  useEffect(() => {
-    fetchStats();
   }, [walletType]);
 
-  // 4. THE REFRESHER: Passed to the Modal
-  // When Modal says "I added money!", this runs to get fresh data.
+  // EFFECT: Run fetch when wallet changes
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  // REFRESHER: Called by Modal
   const handleTransactionSuccess = () => {
-    setIsModalOpen(false); // Close modal
-    fetchStats(); // GET DATA AGAIN
+    setIsModalOpen(false);
+    fetchStats();
+  };
+
+  // --- DELETE FUNCTION (Instant Version) ---
+  const handleDeleteTransaction = async (id) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      // Just delete it immediately
+      await axios.delete(`${API_URL}/api/transaction/${id}`);
+      
+      // Refresh Data
+      fetchStats(); 
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+    }
   };
 
   return (
@@ -92,7 +103,13 @@ const Dashboard = ({ walletType }) => { // 1. REMOVED 'transactions' from props
       {activeView === 'history' && (
         <div className="w-full max-w-3xl">
            <h3 className="text-xl font-bold mb-6 text-slate-200">Transaction History</h3>
-           <TransactionList transactions={transactions} />
+           
+           {/* --- UPDATED: Passing the onDelete function down --- */}
+           <TransactionList 
+              transactions={transactions} 
+              onDelete={handleDeleteTransaction} 
+           />
+
         </div>
       )}
 
@@ -103,12 +120,12 @@ const Dashboard = ({ walletType }) => { // 1. REMOVED 'transactions' from props
         </div>
       )}
 
-      {/* 5. THE CONNECTED MODAL */}
+      {/* MODAL CONNECTION */}
       <AddTransactionModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={handleTransactionSuccess} // Pass the refresher
-        activeWallet={walletType} // Tell it where to save
+        onSuccess={handleTransactionSuccess}
+        activeWallet={walletType}
       />
 
     </div>
