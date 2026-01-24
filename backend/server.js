@@ -78,4 +78,33 @@ app.delete('/api/transaction/:id', async (req, res) => {
   }
 });
 
+// Edit Route - Update a transaction
+app.put('/api/transaction/:id', async (req, res) => {
+  try {
+    const { text, amount, category, date } = req.body;
+    
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, error: 'No transaction found' });
+    }
+
+    transaction.text = text;
+    transaction.amount = amount;
+    transaction.category = category;
+    transaction.date = date;
+
+    await transaction.save();
+
+    return res.status(200).json({
+      success: true,
+      data: transaction
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: 'Server Error'
+    });
+  }
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

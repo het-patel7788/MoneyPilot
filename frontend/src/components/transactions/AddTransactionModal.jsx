@@ -1,26 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import axios from 'axios'; // 1. IMPORT AXIOS
+import axios from 'axios';
 import { X, TrendingUp, TrendingDown, PiggyBank, Calendar, Tag, FileText } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
-// 2. Receive 'activeWallet' and 'onSuccess'
-const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
+const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editData }) => {
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('');
-  const [loading, setLoading] = useState(false); // New Loading State
+  const [loading, setLoading] = useState(false);
 
+  // 1. RESET LOGIC: Runs every time the modal opens
   useEffect(() => {
     if (isOpen) {
-      setAmount('');
-      setDescription('');
-      setCategory('');
-      setLoading(false);
+      if (editData) {
+        // EDIT MODE: Fill the form with the old data
+        setType(editData.amount >= 0 ? (editData.category === 'Investment' ? 'investment' : 'income') : 'expense');
+        setAmount(Math.abs(editData.amount));
+        setDescription(editData.text);
+        setCategory(editData.category);
+        setDate(editData.date ? editData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+        
+        // SAFETY: Ensure button is not spinning
+        setLoading(false); 
+      } else {
+        // ADD MODE: Clear the form
+        setAmount('');
+        setDescription('');
+        setCategory('');
+        setDate(new Date().toISOString().split('T')[0]);
+        
+        // SAFETY: Ensure button is not spinning
+        setLoading(false);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, editData]);
 
   const modes = {
     income: { label: 'Income', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: TrendingUp, placeholder: 'Salary, Freelance...' },
@@ -30,43 +46,44 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
 
   const currentMode = modes[type];
 
-  // 3. THE REAL SUBMIT FUNCTION
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount) return;
+    
+    setLoading(true); // Start spinning
 
-    setLoading(true); // Disable button while saving
-
-    // Logic: If on 'Home', default to 'Personal'. Otherwise use current wallet.
     const targetWallet = activeWallet === 'home' ? 'personal' : activeWallet;
     
-    // Logic: If Expense, make amount negative. If Income, positive.
-    // Note: Backend might expect simple numbers, but let's handle signs here to be safe.
     let finalAmount = parseFloat(amount);
     if (type === 'expense') finalAmount = -Math.abs(finalAmount);
     else finalAmount = Math.abs(finalAmount);
 
+    const payload = {
+      text: description || currentMode.label,
+      amount: finalAmount,
+      wallet: targetWallet,
+      category: type === 'investment' ? 'Investment' : (category || 'General'),
+      date: date
+    };
+
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
-      // POST TO SERVER
-      await axios.post(`${API_URL}/api/transaction`, {
-        text: description || currentMode.label,
-        amount: finalAmount,
-        wallet: targetWallet,
-        category: category || 'General',
-        date: date
-        // We aren't sending date yet because the Backend Schema didn't ask for it specifically, 
-        // but it will auto-add "createdAt". We can add date later.
-      });
+      // 2. DECISION: Are we Updating or Creating?
+      if (editData) {
+        await axios.put(`${API_URL}/api/transaction/${editData._id}`, payload);
+      } else {
+        await axios.post(`${API_URL}/api/transaction`, payload);
+      }
 
-      // SUCCESS!
       onSuccess(); // Tell Dashboard to refresh
-      onClose();   // Close Modal
-
+      onClose();   // Close the modal
+      
     } catch (error) {
       console.error("Failed to save:", error);
-      alert("Failed to save transaction. Is the server running?");
+      alert("Failed to save. Is the server running?");
+    } finally {
+      // 3. THE FINAL SAFETY: Stop spinning no matter what happens
       setLoading(false);
     }
   };
@@ -83,7 +100,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"><X size={20} /></button>
 
-        {/* TABS */}
+        <div className="p-4 text-center border-b border-white/5">
+          <h2 className="text-white font-bold">{editData ? 'Edit Transaction' : 'New Transaction'}</h2>
+        </div>
+
         <div className="flex border-b border-white/10 pr-12">
           {Object.keys(modes).map((modeKey) => {
             const mode = modes[modeKey];
@@ -91,6 +111,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
             return (
               <button
                 key={modeKey}
+                type="button"
                 onClick={() => setType(modeKey)}
                 className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium transition-all duration-300 relative ${isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
               >
@@ -102,7 +123,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
           })}
         </div>
 
-        {/* FORM */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Amount</label>
@@ -113,7 +133,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-             {/* ... Date and Category Inputs (Same as before) ... */}
              <div className="space-y-2">
                 <label className="text-xs text-slate-400">Date</label>
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-white/5 border border-white/10">
@@ -143,7 +162,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet }) => {
             disabled={!amount || loading}
             className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 ${!amount || loading ? 'opacity-50 cursor-not-allowed bg-slate-700' : `${currentMode.bg.replace('/10', '')} hover:brightness-110`}`}
           >
-            {loading ? 'Saving...' : `Add ${currentMode.label}`}
+            {loading ? 'Saving...' : (editData ? 'Update Transaction' : `Add ${currentMode.label}`)}
           </button>
         </form>
       </motion.div>

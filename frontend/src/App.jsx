@@ -22,7 +22,7 @@ const Layout = () => {
         <Header />
       </div>
 
-      <div className="flex flex-1 max-w-7xl mx-auto w-full pt-24 pb-10 relative z-0">
+      <div className="flex flex-1 max-w-8xl mx-auto w-full pt-23 pb-10 relative z-0">
 
         {/* SIDEBAR */}
         <aside className="hidden md:block w-20 flex-none relative z-40">
