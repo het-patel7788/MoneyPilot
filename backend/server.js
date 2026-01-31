@@ -1,110 +1,27 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
-const Transaction = require('./models/Transaction');
+const cors = require('cors');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// Middleware
 app.use(express.json());
+app.use(cors());
 
-
+// Database Connection
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB Error:', err));
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
 
+// ==========================================
+//  ✅ ROUTE MIDDLEWARE (The Only Way)
+// ==========================================
+// This tells the server: "Go look in these files for the actual logic"
+app.use('/api/transaction', require('./routes/transaction'));
+app.use('/api/stats', require('./routes/stats'));
 
-app.get('/', (req, res) => res.send('MoneyPilot Online ✈️'));
-
-// GET Stats (Smart Filter)
-app.get('/api/stats', async (req, res) => {
-  try {
-    const walletType = req.query.wallet; // Check if frontend sent ?wallet=business
-    
-    let query = {};
-    // If a specific wallet is requested, filter by it. 
-    // If NO wallet is requested (Wallet 0), query stays empty {} (Find All)
-    if (walletType && walletType !== 'home') {
-      query = { wallet: walletType };
-    }
-
-    // 1. Get transactions based on the filter
-    const transactions = await Transaction.find(query).sort({ createdAt: -1 });
-    
-    // 2. Calculate Total for THIS view only
-    const totalAmount = transactions.reduce((acc, item) => acc + item.amount, 0);
-
-    res.json({ 
-      netWorth: totalAmount, 
-      transactions: transactions 
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Server Error' });
-  }
-});
-
-app.post('/api/transaction', async (req, res) => {
-  try {
-    const newTx = await Transaction.create(req.body);
-    console.log("New Transaction Added:", newTx.text);
-    res.status(201).json(newTx);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to add transaction' });
-  }
-});
-
-// DELETE Route - Remove a transaction
-app.delete('/api/transaction/:id', async (req, res) => {
-  try {
-    const transaction = await Transaction.findById(req.params.id);
-
-    if (!transaction) {
-      return res.status(404).json({ success: false, error: 'No transaction found' });
-    }
-
-    await transaction.deleteOne();
-
-    return res.status(200).json({
-      success: true,
-      data: {}
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      error: 'Server Error'
-    });
-  }
-});
-
-// Edit Route - Update a transaction
-app.put('/api/transaction/:id', async (req, res) => {
-  try {
-    const { text, amount, category, date } = req.body;
-    
-    const transaction = await Transaction.findById(req.params.id);
-    if (!transaction) {
-      return res.status(404).json({ success: false, error: 'No transaction found' });
-    }
-
-    transaction.text = text;
-    transaction.amount = amount;
-    transaction.category = category;
-    transaction.date = date;
-
-    await transaction.save();
-
-    return res.status(200).json({
-      success: true,
-      data: transaction
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      error: 'Server Error'
-    });
-  }
-});
-
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
