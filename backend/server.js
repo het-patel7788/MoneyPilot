@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ mongoose.connect(process.env.MONGO_URI)
 // This tells the server: "Go look in these files for the actual logic"
 app.use('/api/transaction', require('./routes/transaction'));
 app.use('/api/stats', require('./routes/stats'));
+app.use('/api/upload', uploadRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

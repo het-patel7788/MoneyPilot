@@ -48,6 +48,10 @@ const TransactionSchema = new mongoose.Schema({
     ref: 'Transaction',
     default: null
   },
+  imageUrl: {  // This will store the Cloudinary URL
+    type: String, 
+    required: false
+  },
   
   createdAt: {
     type: Date,

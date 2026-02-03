@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
-import { X, TrendingUp, TrendingDown, PiggyBank, Calendar, Tag, FileText, Wallet } from 'lucide-react';
+// NEW IMPORTS: Paperclip, Loader, CheckCircle
+import { X, TrendingUp, TrendingDown, PiggyBank, Calendar, Tag, FileText, Wallet, Paperclip, Loader, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editData }) => {
@@ -11,8 +12,12 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('');
   
-  // NEW: The Toggle State
   const [deductFromWallet, setDeductFromWallet] = useState(false);
+  
+  // --- NEW: Image Upload State ---
+  const [imageFile, setImageFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
   
   const [loading, setLoading] = useState(false);
 
@@ -25,15 +30,21 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
         setDescription(editData.text);
         setCategory(editData.category);
         setDate(editData.date ? editData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
-        setDeductFromWallet(false); // Default to false on edit for safety
+        setDeductFromWallet(false);
+        // Set existing image if editing
+        setPreview(editData.imageUrl || null);
       } else {
         setAmount('');
         setDescription('');
         setCategory('');
         setDate(new Date().toISOString().split('T')[0]);
-        setDeductFromWallet(false); // Default unchecked
+        setDeductFromWallet(false);
+        // Reset Image
+        setImageFile(null);
+        setPreview(null);
       }
       setLoading(false);
+      setUploading(false);
     }
   }, [isOpen, editData]);
 
@@ -45,29 +56,82 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
   const currentMode = modes[type];
 
+  // --- NEW: Handle File Selection ---
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  };
+
+  // --- NEW: Upload to Cloudinary ---
+  const uploadImage = async () => {
+    if (!imageFile) return editData?.imageUrl || null;
+
+    try {
+      setUploading(true);
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      // 1. Get Signature
+      const sigRes = await axios.get(`${API_URL}/api/upload/signature`);
+      const { signature, timestamp, folder, apiKey, cloudName } = sigRes.data;
+
+      // 2. Upload to Cloudinary
+      const formData = new FormData();
+      formData.append('file', imageFile);
+      formData.append('api_key', apiKey);
+      formData.append('timestamp', timestamp);
+      formData.append('signature', signature);
+      formData.append('folder', folder);
+
+      const cloudRes = await axios.post(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        formData
+      );
+
+      return cloudRes.data.secure_url;
+    } catch (err) {
+      console.error("Upload failed", err);
+      alert("Image upload failed");
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount) return;
 
     setLoading(true);
 
-    const targetWallet = activeWallet === 'home' ? 'personal' : activeWallet;
-
-    let finalAmount = parseFloat(amount);
-    if (type === 'expense') finalAmount = -Math.abs(finalAmount);
-    else finalAmount = Math.abs(finalAmount);
-
-    const payload = {
-      text: description || currentMode.label,
-      amount: finalAmount,
-      wallet: targetWallet,
-      category: type === 'investment' ? 'Investment' : (category || 'General'),
-      date: date,
-      type: type, // Explicitly sending type
-      deductFromWallet: type === 'investment' ? deductFromWallet : false // NEW: Sending the toggle choice
-    };
-
     try {
+      // --- NEW: Upload Image First ---
+      let uploadedImageUrl = null;
+      if (imageFile) {
+         uploadedImageUrl = await uploadImage();
+      } else if (editData && editData.imageUrl) {
+         uploadedImageUrl = editData.imageUrl;
+      }
+
+      const targetWallet = activeWallet === 'home' ? 'personal' : activeWallet;
+
+      let finalAmount = parseFloat(amount);
+      if (type === 'expense') finalAmount = -Math.abs(finalAmount);
+      else finalAmount = Math.abs(finalAmount);
+
+      const payload = {
+        text: description || currentMode.label,
+        amount: finalAmount,
+        wallet: targetWallet,
+        category: type === 'investment' ? 'Investment' : (category || 'General'),
+        date: date,
+        type: type,
+        deductFromWallet: type === 'investment' ? deductFromWallet : false,
+        imageUrl: uploadedImageUrl // <--- Add URL to payload
+      };
+
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
       if (editData) {
@@ -124,16 +188,38 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           
-          {/* AMOUNT INPUT */}
+          {/* AMOUNT INPUT + PAPERCLIP BUTTON */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Amount</label>
             <div className={`relative flex items-center p-4 rounded-xl border ${currentMode.bg} ${currentMode.border}`}>
               <span className={`text-2xl font-bold mr-2 ${currentMode.color}`}>$</span>
               <input type="number" step="0.01" autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full bg-transparent text-3xl font-bold text-white placeholder-white/20 outline-none" />
+              
+              {/* --- NEW: Paperclip Icon --- */}
+              <div className="shrink-0 ml-2">
+                 <label className={`cursor-pointer flex items-center justify-center w-10 h-10 rounded-full transition-all ${preview ? 'bg-white/10 text-emerald-400 ring-2 ring-emerald-500/50' : 'bg-black/20 text-slate-400 hover:bg-black/40 hover:text-white'}`}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleFileSelect} 
+                    />
+                    {preview ? (
+                        <div className="relative w-full h-full rounded-full overflow-hidden">
+                            <img src={preview} alt="Receipt" className="w-full h-full object-cover opacity-80 hover:opacity-100" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <CheckCircle size={16} className="text-emerald-400 drop-shadow-md" />
+                            </div>
+                        </div>
+                    ) : (
+                        <Paperclip size={20} />
+                    )}
+                 </label>
+              </div>
             </div>
           </div>
 
-          {/* NEW: INSIDE MONEY TOGGLE (Only for Investment) */}
+          {/* INSIDE MONEY TOGGLE */}
           <AnimatePresence>
             {type === 'investment' && (
               <motion.div 
@@ -160,7 +246,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
                     </div>
                   </div>
                   
-                  {/* TOGGLE SWITCH VISUAL */}
                   <div className={`w-10 h-5 rounded-full relative transition-colors ${deductFromWallet ? 'bg-indigo-500' : 'bg-slate-700'}`}>
                     <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${deductFromWallet ? 'translate-x-5' : 'translate-x-0'}`} />
                   </div>
@@ -197,9 +282,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
           <button
             type="submit"
             disabled={!amount || loading}
-            className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 ${!amount || loading ? 'opacity-50 cursor-not-allowed bg-slate-700' : `${currentMode.bg.replace('/10', '')} hover:brightness-110`}`}
+            className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${!amount || loading ? 'opacity-50 cursor-not-allowed bg-slate-700' : `${currentMode.bg.replace('/10', '')} hover:brightness-110`}`}
           >
-            {loading ? 'Saving...' : (editData ? 'Update Transaction' : `Add ${currentMode.label}`)}
+            {loading ? <Loader className="animate-spin" size={20} /> : null}
+            {loading ? (uploading ? 'Uploading Image...' : 'Saving...') : (editData ? 'Update Transaction' : `Add ${currentMode.label}`)}
           </button>
         </form>
       </motion.div>

@@ -2,8 +2,13 @@
 
 /* Custom Animation from Permission-Lab */
 @keyframes scan {
-  0% { top: 0%; }
-  100% { top: 100%; }
+  0% {
+    top: 0%;
+  }
+
+  100% {
+    top: 100%;
+  }
 }
 
 .animate-scan {
@@ -11,9 +16,27 @@
 }
 
 body {
-  background-color: #0f172a; /* This is bg-slate-900 */
+  background-color: #0f172a;
+  /* This is bg-slate-900 */
   color: white;
-  font-family: ui-sans-serif, system-ui, sans-serif; /* This is font-sans */
-  -webkit-font-smoothing: antialiased; /* This is antialiased */
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  /* This is font-sans */
+  -webkit-font-smoothing: antialiased;
+  /* This is antialiased */
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- REMOVE UGLY NUMBER SPINNERS --- */
+
+/* Chrome, Safari, Edge, Opera */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }

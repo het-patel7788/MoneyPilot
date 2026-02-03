@@ -21,7 +21,8 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { amount, type, date, deductFromWallet } = req.body;
+    // 1: ADD imageUrl TO THIS LIST
+    const { amount, type, date, deductFromWallet, imageUrl } = req.body;
     
     const text = sanitize(req.body.text) || 'Untitled Transaction';
     const category = sanitize(req.body.category) || 'General';
@@ -34,6 +35,7 @@ router.post('/', async (req, res) => {
       category,
       wallet,
       date: date || new Date(),
+      imageUrl: imageUrl, // 2: SAVE IT TO DATABASE
       rootId: null
     });
 
@@ -99,7 +101,8 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid ID format' });
     }
 
-    const allowedUpdates = ['text', 'amount', 'wallet', 'category', 'date'];
+    // 3: ALLOW imageUrl TO BE UPDATED
+    const allowedUpdates = ['text', 'amount', 'wallet', 'category', 'date', 'imageUrl'];
     const updates = {};
     
     allowedUpdates.forEach(field => {
