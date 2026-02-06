@@ -49,8 +49,10 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
     const element = document.getElementById(`tx-${rootId}`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      element.classList.add('bg-slate-700');
-      setTimeout(() => element.classList.remove('bg-slate-700'), 1500);
+      element.classList.add('!border-indigo-500', 'bg-indigo-500/10', 'transition-all', 'duration-500');
+      setTimeout(() => {
+        element.classList.remove('!border-indigo-500', 'bg-indigo-500/10');
+      }, 1500);
     } else {
       alert("Original transfer record not found in this list.");
     }
@@ -60,7 +62,7 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
 
   return (
     <>
-      <div className="flex flex-col gap-3 w-full max-h-[320px] overflow-y-auto pr-2 custom-scrollbar relative">
+      <div className="flex flex-col gap-3 w-full relative">
         {displayTransactions.length === 0 ? (
           <div className="text-center p-8 rounded-xl border border-white/5 border-dashed">
             <p className="text-slate-500 text-sm">No recent activity.</p>
