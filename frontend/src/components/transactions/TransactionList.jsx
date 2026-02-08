@@ -3,7 +3,24 @@ import ReactDOM from 'react-dom';
 import { ArrowUpRight, ArrowDownLeft, Trash2, Pencil, RefreshCw, Zap, Link as LinkIcon, MoreVertical, FileText, X } from 'lucide-react';
 
 const TransactionList = ({ transactions, onDelete, onEdit }) => {
-  const displayTransactions = transactions.filter(tx => tx.type !== 'investment');
+  // 1. Filter out investments
+  // 2. Sort by User Date (Descending)
+  // 3. Tie-breaker: Sort by Created Time (Descending) - effectively "Newest Added"
+  const displayTransactions = transactions
+    .filter(tx => tx.type !== 'investment')
+    .sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      
+      // Compare Dates first
+      if (dateA < dateB) return 1;
+      if (dateA > dateB) return -1;
+      
+      // If Dates are equal, compare exact Creation Time (Newest First)
+      const timeA = new Date(a.createdAt);
+      const timeB = new Date(b.createdAt);
+      return timeB - timeA;
+    });
 
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });

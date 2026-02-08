@@ -132,7 +132,8 @@ router.put('/:id', async (req, res) => {
 
 router.post('/withdraw', async (req, res) => {
   try {
-    const { originalId, withdrawAmount, remainingAmount, totalValue } = req.body;
+    // 1. GET IMAGE URL FROM FRONTEND (The Sell Receipt)
+    const { originalId, withdrawAmount, remainingAmount, totalValue, imageUrl } = req.body; 
 
     // VALIDATION
     if (!originalId || !mongoose.Types.ObjectId.isValid(originalId)) {
@@ -141,12 +142,14 @@ router.post('/withdraw', async (req, res) => {
     if (withdrawAmount < 0 || remainingAmount < 0 || totalValue < 0) {
       return res.status(400).json({ success: false, error: 'Negative values are not allowed' });
     }
+    // Check Math (allow 1 cent variance)
     if (Math.abs((withdrawAmount + remainingAmount) - totalValue) > 0.01) {
        return res.status(400).json({ success: false, error: 'Math Error: Withdraw + Remaining must equal Total' });
     }
 
     const original = await Transaction.findById(originalId);
     if (!original) return res.status(404).json({ success: false, error: 'Investment not found' });
+    
     if (original.status === 'closed') {
       return res.status(400).json({ success: false, error: 'Transaction Failed: This investment is already closed.' });
     }
@@ -154,23 +157,16 @@ router.post('/withdraw', async (req, res) => {
     const rootReference = original.rootId || original._id;
     const originalPrincipal = Math.abs(original.amount);
     
-    // --- NARRATIVE LOGIC: TELL THE STORY ---
-    
-    // 1. Did we win or lose overall?
+    // --- NARRATIVE LOGIC ---
     const isLoss = totalValue < originalPrincipal;
     
-    // 2. Format the numbers nicely
     const start = Math.round(originalPrincipal);
     const end = Math.round(totalValue);
     const cash = Math.round(withdrawAmount);
     const kept = Math.round(remainingAmount);
 
-    // 3. Build the "Chapter 1: Valuation" string
-    // Example: "($100 ➔ $200)" or "($50 ➔ $40)"
     const valStory = `($${start} ➔ $${end})`;
 
-    // 4. Build the "Chapter 2: The Split" string
-    // Example: " • Cash: $150 | Active: $50"
     let splitStory = '';
     if (kept > 0) {
         splitStory = ` • Cash: $${cash} | Active: $${kept}`;
@@ -178,16 +174,14 @@ router.post('/withdraw', async (req, res) => {
         splitStory = ` • Cash Out: $${cash}`;
     }
 
-    // 5. Combine them
     const storyText = `${valStory}${splitStory}`;
 
-
-    // Determine the Label
     let label = 'Strategy Exit';
     if (remainingAmount > 0) label = 'Strategy Yield';
-    if (isLoss) label = 'Strategy Loss'; // Triggers Red Styling
+    if (isLoss) label = 'Strategy Loss'; 
 
-    // --- 3. CREATE LOG (Money In) ---
+    // --- 3. CREATE LOG (The Cash / Profit) ---
+    // This gets the NEW receipt (The Sell Order)
     if (withdrawAmount > 0) {
       await Transaction.create({
         text: `${label}: ${original.text} ${storyText}`,
@@ -195,8 +189,9 @@ router.post('/withdraw', async (req, res) => {
         wallet: original.wallet,
         category: 'Trade',
         type: 'income',
-        date: new Date(),
-        rootId: rootReference
+        date: new Date(), // Profit is realized TODAY
+        rootId: rootReference,
+        imageUrl: imageUrl || null // <--- SAVE NEW SELL RECEIPT
       });
     }
 
@@ -205,7 +200,8 @@ router.post('/withdraw', async (req, res) => {
     original.currentValue = totalValue;
     await original.save();
 
-    // --- 5. CREATE ROLLOVER (If Partial) ---
+    // --- 5. CREATE ROLLOVER (The Remaining Asset) ---
+    // This INHERITS the OLD receipt (The Buy Order) and OLD Date
     if (remainingAmount > 0) {
       const originalSign = original.amount >= 0 ? 1 : -1;
       const newText = original.text.includes('(Cont.)') ? original.text : `${original.text} (Cont.)`;
@@ -219,7 +215,10 @@ router.post('/withdraw', async (req, res) => {
         status: 'active',
         parentId: original._id,
         rootId: rootReference,
-        date: new Date()
+        
+        // --- CRITICAL FIXES FOR "AMNESIA" ---
+        imageUrl: original.imageUrl, // <--- KEEP ORIGINAL BUY RECEIPT
+        date: original.date          // <--- KEEP ORIGINAL BUY DATE
       });
     }
 

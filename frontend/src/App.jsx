@@ -4,6 +4,7 @@ import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import Dashboard from './pages/Dashboard';
+import InvestmentDetails from './pages/InvestmentDetails';
 
 // Helper to grab the ID from URL (e.g., /business -> walletId = 'business')
 const WalletWrapper = () => {
@@ -45,6 +46,9 @@ const Layout = () => {
               path="/:walletId"
               element={<WalletWrapper />}
             />
+            
+            {/* Route 3: Investment Details */}
+            <Route path="/investment/:id" element={<InvestmentDetails />} />
           </Routes>
         </main>
       </div>
