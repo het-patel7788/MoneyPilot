@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, History, X, CheckCircle, Loader, Camera, FileText, Clock } from 'lucide-react';
-import ReactDOM from 'react-dom'; // <--- IMPORT REACT DOM FOR PORTAL
+import { ArrowRight, History, X, CheckCircle, Loader, FileText, Clock } from 'lucide-react';
+import ReactDOM from 'react-dom'; 
 import axios from 'axios';
 
 const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
@@ -9,13 +9,8 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // NEW: State for Receipt Popup
+  // Only state for VIEWING the original receipt
   const [showReceipt, setShowReceipt] = useState(false);
-
-  // Add Image State
-  const [imageFile, setImageFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [uploading, setUploading] = useState(false);
 
   // Source of Truth: Dollar Amount
   const [exitAmount, setExitAmount] = useState(0);
@@ -54,46 +49,18 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
     return `Withdrawing $${Math.floor(exitAmount).toLocaleString()}. Leaving $${Math.floor(remainingAmount).toLocaleString()} active.`;
   };
 
-  const uploadImage = async () => {
-    if (!imageFile) return null;
-    try {
-      setUploading(true);
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const sigRes = await axios.get(`${API_URL}/api/upload/signature`);
-      const { signature, timestamp, folder, apiKey, cloudName } = sigRes.data;
-
-      const formData = new FormData();
-      formData.append('file', imageFile);
-      formData.append('api_key', apiKey);
-      formData.append('timestamp', timestamp);
-      formData.append('signature', signature);
-      formData.append('folder', folder);
-
-      const cloudRes = await axios.post(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        formData
-      );
-      return cloudRes.data.secure_url;
-    } catch (err) {
-      console.error("Upload failed", err);
-      return null;
-    } finally {
-      setUploading(false);
-    }
-  };
-
+  // --- SIMPLIFIED EXECUTE (No Image Upload) ---
   const handleExecute = async () => {
     setLoading(true);
     try {
-      const uploadedUrl = await uploadImage();
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+      // Send strictly data, no image URL
       await axios.post(`${API_URL}/api/transaction/withdraw`, {
         originalId: transaction._id,
         withdrawAmount: exitAmount,    
         remainingAmount: remainingAmount,
-        totalValue: currentTotal,
-        imageUrl: uploadedUrl
+        totalValue: currentTotal
       });
 
       setIsExpanded(false);
@@ -129,7 +96,7 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
         </div>
         
         <div className="flex items-center gap-2">
-            {/* 1. RECEIPT BUTTON */}
+            {/* 1. RECEIPT BUTTON (Only if this specific card has one) */}
             {transaction.imageUrl && (
                 <button 
                   onClick={() => setShowReceipt(true)}
@@ -151,7 +118,7 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
 
             {/* 3. BADGE */}
             <div className="px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold">
-              ACTIVE
+               ACTIVE
             </div>
         </div>
       </div>
@@ -230,8 +197,8 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2">
-                  <div className="flex-1">
+                {/* 1. WITHDRAW INPUT (CLEAN - NO CAMERA) */}
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
                     <label className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest block mb-1">Withdraw Amount</label>
                     <div className="relative">
                       <span className="absolute left-0 text-emerald-500 font-bold">$</span>
@@ -243,23 +210,6 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
                         className="w-full bg-transparent pl-3 text-white font-bold outline-none"
                       />
                     </div>
-                  </div>
-
-                  <label className={`cursor-pointer w-10 h-10 flex items-center justify-center rounded-lg transition-all ${preview ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40'}`}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          setImageFile(file);
-                          setPreview(URL.createObjectURL(file));
-                        }
-                      }} 
-                    />
-                    {preview ? <CheckCircle size={18} /> : <Camera size={18} />}
-                  </label>
                 </div>
 
                 <div className="bg-slate-800/50 border border-white/5 rounded-xl p-3">
@@ -276,7 +226,7 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
                 className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${exitAmount > 0 ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
               >
                 {loading ? <Loader className="animate-spin" size={18} /> : <CheckCircle size={18} />}
-                {loading ? (uploading ? 'Uploading Image...' : 'Executing Strategy...') : 'Confirm Strategy'}
+                {loading ? 'Executing Strategy...' : 'Confirm Strategy'}
               </button>
             </div>
           </motion.div>
@@ -284,7 +234,7 @@ const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
       </AnimatePresence>
     </motion.div>
 
-    {/* --- THE EXACT POPUP STYLE FROM TRANSACTIONLIST (PORTAL) --- */}
+    {/* RECEIPT POPUP (Still needed to view original receipt) */}
     {showReceipt && ReactDOM.createPortal(
         <div
           className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in duration-200"

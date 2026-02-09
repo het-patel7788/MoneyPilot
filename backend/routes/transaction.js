@@ -132,15 +132,12 @@ router.put('/:id', async (req, res) => {
 
 router.post('/withdraw', async (req, res) => {
   try {
-    // 1. GET IMAGE URL FROM FRONTEND (The Sell Receipt)
-    const { originalId, withdrawAmount, remainingAmount, totalValue, imageUrl } = req.body; 
+    // 1. REMOVE 'imageUrl' from input (Frontend won't send it anymore)
+    const { originalId, withdrawAmount, remainingAmount, totalValue } = req.body; 
 
     // VALIDATION
     if (!originalId || !mongoose.Types.ObjectId.isValid(originalId)) {
       return res.status(400).json({ success: false, error: 'Invalid Investment ID' });
-    }
-    if (withdrawAmount < 0 || remainingAmount < 0 || totalValue < 0) {
-      return res.status(400).json({ success: false, error: 'Negative values are not allowed' });
     }
     // Check Math (allow 1 cent variance)
     if (Math.abs((withdrawAmount + remainingAmount) - totalValue) > 0.01) {
@@ -156,42 +153,38 @@ router.post('/withdraw', async (req, res) => {
 
     const rootReference = original.rootId || original._id;
     const originalPrincipal = Math.abs(original.amount);
+    const isLoss = totalValue < originalPrincipal; 
     
     // --- NARRATIVE LOGIC ---
-    const isLoss = totalValue < originalPrincipal;
+    const valStory = `($${Math.round(originalPrincipal)} ➔ $${Math.round(totalValue)})`;
     
-    const start = Math.round(originalPrincipal);
-    const end = Math.round(totalValue);
-    const cash = Math.round(withdrawAmount);
-    const kept = Math.round(remainingAmount);
-
-    const valStory = `($${start} ➔ $${end})`;
-
     let splitStory = '';
-    if (kept > 0) {
-        splitStory = ` • Cash: $${cash} | Active: $${kept}`;
+    if (remainingAmount > 0) {
+        splitStory = ` • Cash: $${Math.round(withdrawAmount)} | Active: $${Math.round(remainingAmount)}`;
     } else {
-        splitStory = ` • Cash Out: $${cash}`;
+        splitStory = ` • Cash Out: $${Math.round(withdrawAmount)}`;
     }
 
-    const storyText = `${valStory}${splitStory}`;
+    const logText = `${original.text} ${valStory}${splitStory}`;
 
     let label = 'Strategy Exit';
     if (remainingAmount > 0) label = 'Strategy Yield';
     if (isLoss) label = 'Strategy Loss'; 
 
     // --- 3. CREATE LOG (The Cash / Profit) ---
-    // This gets the NEW receipt (The Sell Order)
     if (withdrawAmount > 0) {
       await Transaction.create({
-        text: `${label}: ${original.text} ${storyText}`,
+        text: `${label}: ${logText}`,
         amount: Math.abs(withdrawAmount), 
         wallet: original.wallet,
         category: 'Trade',
         type: 'income',
-        date: new Date(), // Profit is realized TODAY
+        date: new Date(), 
         rootId: rootReference,
-        imageUrl: imageUrl || null // <--- SAVE NEW SELL RECEIPT
+        parentId: original._id,
+        
+        // FIX: No Receipt for "Cash Out" logs. 
+        imageUrl: null 
       });
     }
 
@@ -201,7 +194,6 @@ router.post('/withdraw', async (req, res) => {
     await original.save();
 
     // --- 5. CREATE ROLLOVER (The Remaining Asset) ---
-    // This INHERITS the OLD receipt (The Buy Order) and OLD Date
     if (remainingAmount > 0) {
       const originalSign = original.amount >= 0 ? 1 : -1;
       const newText = original.text.includes('(Cont.)') ? original.text : `${original.text} (Cont.)`;
@@ -216,9 +208,10 @@ router.post('/withdraw', async (req, res) => {
         parentId: original._id,
         rootId: rootReference,
         
-        // --- CRITICAL FIXES FOR "AMNESIA" ---
-        imageUrl: original.imageUrl, // <--- KEEP ORIGINAL BUY RECEIPT
-        date: original.date          // <--- KEEP ORIGINAL BUY DATE
+        // FIX: Stop Inheritance. New active card has NO receipt.
+        imageUrl: null, 
+        
+        date: original.date // Keep original date for sorting
       });
     }
 
