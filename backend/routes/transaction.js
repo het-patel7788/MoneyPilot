@@ -4,7 +4,13 @@ const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 
 // Helper: Basic Sanitization
-const sanitize = (str) => str ? str.trim().substring(0, 200) : '';
+const sanitize = (str) => {
+  if (!str) return '';
+  return str
+    .trim()
+    .replace(/[<>"']/g, '') // Removes dangerous HTML characters
+    .substring(0, 200);
+};
 
 // ==========================================
 // 1. STANDARD ROUTES
@@ -73,24 +79,33 @@ router.delete('/:id', async (req, res) => {
     const transaction = await Transaction.findById(req.params.id);
     if (!transaction) return res.status(404).json({ success: false, error: 'Not found' });
     
-    const hasChildren = await Transaction.findOne({ parentId: req.params.id });
-    if (hasChildren) {
+    // --- 1. SMART SAFETY CHECK ---
+    // Only block deletion if there is a FUTURE investment (Rollover) depending on this.
+    // We do NOT block if the only child is just the "Transfer" receipt.
+    const hasRollover = await Transaction.findOne({ 
+      parentId: req.params.id, 
+      type: 'investment',   // Look for "Investment" children (The Chain)
+      status: 'active'      // (Optional: specifically active ones)
+    });
+
+    if (hasRollover) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Cannot delete: This has dependent records (rollovers). Delete them first.' 
+        error: 'Cannot delete: This investment has a future rollover. Delete the newest record first.' 
       });
     }
 
-    if (transaction.type === 'investment') {
-      await Transaction.deleteMany({ 
-        parentId: transaction._id, 
-        category: 'Transfer' 
-      });
-    }
+    // --- 2. BULLETPROOF CLEANUP ---
+    // Delete ALL children (Transfers, Logs, etc.) by ID.
+    // This works even if you rename "Transfer" to "Pizza" in the future.
+    await Transaction.deleteMany({ parentId: transaction._id });
 
+    // --- 3. DELETE MAIN RECORD ---
     await transaction.deleteOne();
+    
     return res.status(200).json({ success: true, data: {} });
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
 });
