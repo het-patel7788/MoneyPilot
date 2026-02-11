@@ -109,7 +109,7 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className="w-20 h-full relative">
+      <div className="w-20 h-full relative mt-2">
         <div
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}

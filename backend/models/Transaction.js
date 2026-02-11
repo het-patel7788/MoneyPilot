@@ -1,6 +1,14 @@
 const mongoose = require('mongoose');
 
 const TransactionSchema = new mongoose.Schema({
+  // --- NEW SECURITY FIELD ---
+  userId: {
+    type: String,
+    required: true, // Every transaction MUST belong to someone
+    index: true     // Makes searching by user extremely fast
+  },
+  // --------------------------
+
   text: {
     type: String,
     trim: true,
@@ -43,12 +51,12 @@ const TransactionSchema = new mongoose.Schema({
     ref: 'Transaction',
     default: null
   },
-  rootId: { // <--- NEW FIELD: Points to the original investment
+  rootId: { 
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction',
     default: null
   },
-  imageUrl: {  // This will store the Cloudinary URL
+  imageUrl: {
     type: String, 
     required: false
   },
@@ -60,7 +68,8 @@ const TransactionSchema = new mongoose.Schema({
 });
 
 // INDEXING (For Speed)
-TransactionSchema.index({ wallet: 1, type: 1 });
+// We add userId to the index so queries like "Find My Business Expenses" are instant
+TransactionSchema.index({ userId: 1, wallet: 1, type: 1 });
 TransactionSchema.index({ rootId: 1 });
 
 module.exports = mongoose.model('Transaction', TransactionSchema);

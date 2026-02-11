@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import axios from 'axios';
+import { useAuth } from "@clerk/clerk-react"; 
+import { useNavigate } from "react-router-dom";
+import useAxios from '../../api/axios';
+import axios from 'axios'; // Regular axios for external APIs (Cloudinary)
 import { X, TrendingUp, TrendingDown, PiggyBank, Calendar, Tag, FileText, Wallet, Paperclip, Loader, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editData }) => {
+  const { isSignedIn } = useAuth();
+  const navigate = useNavigate();
+  const securedAxios = useAxios(); // For internal API calls
+
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -12,24 +19,22 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
   const [category, setCategory] = useState('');
   
   const [deductFromWallet, setDeductFromWallet] = useState(false);
-  
-  // Image State
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
-  
   const [loading, setLoading] = useState(false);
 
   // RESET LOGIC
   useEffect(() => {
     if (isOpen) {
       if (editData) {
-        setType(editData.amount >= 0 ? (editData.category === 'Investment' ? 'investment' : 'income') : 'expense');
-        setAmount(Math.abs(editData.amount));
-        setDescription(editData.text);
-        setCategory(editData.category);
-        setDate(editData.date ? editData.date.split('T')[0] : new Date().toISOString().split('T')[0]);
-        setDeductFromWallet(false);
+        setType(editData.type || 'expense');
+        setAmount(editData.amount ? Math.abs(editData.amount) : '');
+        setDescription(editData.text || '');
+        setCategory(editData.category || '');
+        const safeDate = editData.date ? editData.date.split('T')[0] : new Date().toISOString().split('T')[0];
+        setDate(safeDate);
+        setDeductFromWallet(editData.deductFromWallet || false);
         setPreview(editData.imageUrl || null);
       } else {
         setAmount('');
@@ -45,7 +50,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
     }
   }, [isOpen, editData]);
 
-  // Clean up preview URL to prevent memory leaks
+  // Clean up preview URL
   useEffect(() => {
     return () => {
       if (preview && preview.startsWith('blob:')) {
@@ -59,24 +64,13 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
     expense: { label: 'Expense', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', icon: TrendingDown, placeholder: 'Food, Rent...' },
     investment: { label: 'Investment', color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: PiggyBank, placeholder: 'Stocks, Crypto...' }
   };
-
   const currentMode = modes[type];
 
-  // --- SECURITY FIX: 5MB Limit ---
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // 1. Validate Type
-      if (!file.type.startsWith('image/')) {
-        alert("Only image files are allowed.");
-        return;
-      }
-      // 2. Validate Size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert("File is too large. Max size is 5MB.");
-        return;
-      }
-
+      if (!file.type.startsWith('image/')) return alert("Only image files are allowed.");
+      if (file.size > 5 * 1024 * 1024) return alert("File is too large. Max size is 5MB.");
       setImageFile(file);
       setPreview(URL.createObjectURL(file));
     }
@@ -84,12 +78,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
   const uploadImage = async () => {
     if (!imageFile) return editData?.imageUrl || null;
-
     try {
       setUploading(true);
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
-      const sigRes = await axios.get(`${API_URL}/api/upload/signature`);
+      const sigRes = await securedAxios.get(`${API_URL}/api/upload/signature`);
       const { signature, timestamp, folder, apiKey, cloudName } = sigRes.data;
 
       const formData = new FormData();
@@ -103,7 +95,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         formData
       );
-
       return cloudRes.data.secure_url;
     } catch (err) {
       console.error("Upload failed", err);
@@ -116,9 +107,26 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!amount) return;
-    if (uploading) return; // Prevent double submit
 
+    // --- 1. GUEST HANDLING ---
+    if (!isSignedIn) {
+        const pendingData = {
+            amount: amount,
+            text: description,
+            type: type,
+            category: category,
+            date: date,
+            deductFromWallet: deductFromWallet,
+            wallet: activeWallet 
+        };
+        localStorage.setItem('pendingTransaction', JSON.stringify(pendingData));
+        
+        onClose(); 
+        navigate('/sign-in');
+        return;
+    }
+
+    if (!amount || uploading) return;
     setLoading(true);
 
     try {
@@ -129,28 +137,27 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
          uploadedImageUrl = editData.imageUrl;
       }
 
-      const targetWallet = activeWallet === 'home' ? 'personal' : activeWallet;
+      // Wallet Resolution
+      const resolvedWallet = (editData && editData.wallet) ? editData.wallet : activeWallet;
+      const targetWallet = resolvedWallet === 'home' ? 'personal' : resolvedWallet;
 
       let finalAmount = parseFloat(amount);
       if (type === 'expense') finalAmount = -Math.abs(finalAmount);
       else finalAmount = Math.abs(finalAmount);
 
-      // --- TIME SORTING FIX ---
-      // If the selected date matches "Today", we attach the current time (HH:MM:SS).
-      // This ensures new entries sit on TOP of the list, not at the bottom (Midnight).
+      // Date Handling
       let finalDate = date;
       const todayStr = new Date().toISOString().split('T')[0];
       if (date === todayStr) {
-          finalDate = new Date().toISOString(); // Use "Right Now"
+          finalDate = new Date().toISOString(); 
       }
-      // ------------------------
 
       const payload = {
         text: description || currentMode.label,
         amount: finalAmount,
         wallet: targetWallet,
         category: type === 'investment' ? 'Investment' : (category || 'General'),
-        date: finalDate, // <--- Using the time-adjusted date
+        date: finalDate,
         type: type,
         deductFromWallet: type === 'investment' ? deductFromWallet : false,
         imageUrl: uploadedImageUrl
@@ -158,17 +165,16 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-      if (editData) {
-        await axios.put(`${API_URL}/api/transaction/${editData._id}`, payload);
+      if (editData && editData._id) {
+        await securedAxios.put(`${API_URL}/api/transaction/${editData._id}`, payload);
       } else {
-        await axios.post(`${API_URL}/api/transaction`, payload);
+        await securedAxios.post(`${API_URL}/api/transaction`, payload);
       }
 
       onSuccess();
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
-      alert("Failed to save. Is the server running?");
     } finally {
       setLoading(false);
     }
@@ -176,11 +182,9 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
   if (!isOpen) return null;
 
-  // --- SCROLL FIX: Added 'overflow-y-auto' and 'min-h-full' wrapper ---
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[99999] overflow-y-auto bg-black/60 backdrop-blur-sm">
       <div className="flex min-h-full items-center justify-center p-4 text-center">
-        
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -195,7 +199,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
             <h2 className="text-white font-bold">{editData ? 'Edit Transaction' : 'New Transaction'}</h2>
           </div>
 
-          {/* TABS */}
           <div className="flex border-b border-white/10 pr-12">
             {Object.keys(modes).map((modeKey) => {
               const mode = modes[modeKey];
@@ -216,8 +219,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            
-            {/* AMOUNT INPUT + PAPERCLIP BUTTON */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Amount</label>
               <div className={`relative flex items-center p-4 rounded-xl border ${currentMode.bg} ${currentMode.border}`}>
@@ -232,15 +233,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
                   className="w-full bg-transparent text-3xl font-bold text-white placeholder-white/20 outline-none" 
                 />
                 
-                {/* Paperclip Icon */}
+                {/* --- RESTORED IMAGE UPLOAD BUTTON --- */}
                 <div className="shrink-0 ml-2">
-                   <label className={`cursor-pointer flex items-center justify-center w-10 h-10 rounded-full transition-all ${preview ? 'bg-white/10 text-emerald-400 ring-2 ring-emerald-500/50' : 'bg-black/20 text-slate-400 hover:bg-black/40 hover:text-white'}`}>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={handleFileSelect} 
-                      />
+                    <label className={`cursor-pointer flex items-center justify-center w-10 h-10 rounded-full transition-all ${preview ? 'bg-white/10 text-emerald-400 ring-2 ring-emerald-500/50' : 'bg-black/20 text-slate-400 hover:bg-black/40 hover:text-white'}`}>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                       {preview ? (
                           <div className="relative w-full h-full rounded-full overflow-hidden">
                               <img src={preview} alt="Receipt" className="w-full h-full object-cover opacity-80 hover:opacity-100" />
@@ -251,12 +247,12 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
                       ) : (
                           <Paperclip size={20} />
                       )}
-                   </label>
+                    </label>
                 </div>
               </div>
             </div>
 
-            {/* INSIDE MONEY TOGGLE */}
+            {/* --- RESTORED INVESTMENT TOGGLE --- */}
             <AnimatePresence>
               {type === 'investment' && (
                 <motion.div 
@@ -282,7 +278,6 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
                         </p>
                       </div>
                     </div>
-                    
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${deductFromWallet ? 'bg-indigo-500' : 'bg-slate-700'}`}>
                       <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${deductFromWallet ? 'translate-x-5' : 'translate-x-0'}`} />
                     </div>
@@ -322,7 +317,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
               className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${!amount || loading ? 'opacity-50 cursor-not-allowed bg-slate-700' : `${currentMode.bg.replace('/10', '')} hover:brightness-110`}`}
             >
               {loading ? <Loader className="animate-spin" size={20} /> : null}
-              {loading ? (uploading ? 'Uploading Image...' : 'Saving...') : (editData ? 'Update Transaction' : `Add ${currentMode.label}`)}
+              {loading ? (uploading ? 'Uploading Image...' : 'Saving...') : (editData && editData._id ? 'Update Transaction' : `Add ${currentMode.label}`)}
             </button>
           </form>
         </motion.div>

@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, FileText, DollarSign, Activity, X, TrendingUp, Wallet } from 'lucide-react';
 import ReactDOM from 'react-dom'; 
-import axios from 'axios';
+import useAxios from '../api/axios';
 
 const InvestmentDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const axios = useAxios();
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [viewImage, setViewImage] = useState(null);

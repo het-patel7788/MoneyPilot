@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, History, X, CheckCircle, Loader, FileText, Clock } from 'lucide-react';
 import ReactDOM from 'react-dom'; 
-import axios from 'axios';
+import useAxios from '../../api/axios';
 
 const InvestmentCard = ({ transaction, onSuccess, onViewHistory }) => {
+  const axios = useAxios();
   const [currentVal, setCurrentVal] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);

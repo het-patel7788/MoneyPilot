@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, Link } from 'react-router-dom';
-import axios from 'axios';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from "@clerk/clerk-react"; // AUTH IMPORT
+import useAxios from '../api/axios';
 import { Plus, PieChart, ArrowRight } from 'lucide-react';
 import TransactionList from '../components/transactions/TransactionList';
 import AddTransactionModal from '../components/transactions/AddTransactionModal';
 import InvestmentView from '../components/investments/InvestmentView';
 
 const Dashboard = ({ walletType }) => {
+  // --- AUTH HOOKS ---
+  const { isSignedIn } = useAuth();
+  const navigate = useNavigate();
+  const axios = useAxios();
+
   const [netWorth, setNetWorth] = useState(0);
   const [cashBalance, setCashBalance] = useState(0);
   const [assetValue, setAssetValue] = useState(0);
@@ -25,7 +31,44 @@ const Dashboard = ({ walletType }) => {
   };
   const currentTheme = themes[walletType] || themes.home;
 
+  // --- 1. THE REDIRECT FIX (Restores Pending Data) ---
+  useEffect(() => {
+    if (isSignedIn) {
+        const saved = localStorage.getItem('pendingTransaction');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                
+                // If the transaction belongs to a DIFFERENT wallet, move the user there first.
+                const savedWallet = parsed.wallet || 'home';
+                if (savedWallet !== walletType) {
+                    const targetPath = savedWallet === 'home' ? '/' : `/${savedWallet}`;
+                    navigate(targetPath);
+                    return; // Stop here, let the page reload on the new URL
+                }
+
+                // If we are in the right place, open the modal
+                setEditTransaction(parsed); 
+                setIsModalOpen(true);       
+                localStorage.removeItem('pendingTransaction'); 
+            } catch (e) {
+                console.error("Failed to parse pending transaction", e);
+                localStorage.removeItem('pendingTransaction');
+            }
+        }
+    }
+  }, [isSignedIn, walletType, navigate]);
+
   const fetchStats = useCallback(async () => {
+    // GATEKEEPER: Don't fetch if guest (prevents 401 errors)
+    if (!isSignedIn) {
+        setNetWorth(0);
+        setCashBalance(0);
+        setAssetValue(0);
+        setTransactions([]);
+        return;
+    }
+
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const response = await axios.get(`${API_URL}/api/stats?wallet=${walletType}`);
@@ -33,10 +76,8 @@ const Dashboard = ({ walletType }) => {
       setCashBalance(response.data.cashBalance);
       setAssetValue(response.data.assetValue);
       
-      // --- THE FINAL SORT FIX ---
-      // Goal: Newest at TOP.
-      // 1. Sort by Date Descending (New -> Old)
-      // 2. If Dates are equal, use ID Descending (New -> Old)
+      // --- RESTORED BOSS SORTING LOGIC ---
+      // This is the logic I accidentally deleted. It is back now.
       const sortedTransactions = response.data.transactions.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
@@ -48,7 +89,6 @@ const Dashboard = ({ walletType }) => {
 
         // If dates are exactly the same (e.g. both Today),
         // Sort by ID string (MongoDB IDs are chronological)
-        // "b > a" puts b first (Newer ID first)
         if (a._id < b._id) return 1;
         if (a._id > b._id) return -1;
         return 0;
@@ -58,18 +98,28 @@ const Dashboard = ({ walletType }) => {
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
-  }, [walletType]);
+  }, [walletType, isSignedIn]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const handleTransactionSuccess = () => { setIsModalOpen(false); fetchStats(); };
 
   const handleEdit = (transaction) => {
+    // GATEKEEPER
+    if (!isSignedIn) {
+        navigate('/sign-in');
+        return;
+    }
     setEditTransaction(transaction);
     setIsModalOpen(true);
   };
 
   const handleDeleteTransaction = async (id) => {
+    // GATEKEEPER
+    if (!isSignedIn) {
+        navigate('/sign-in');
+        return;
+    }
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       await axios.delete(`${API_URL}/api/transaction/${id}`);
@@ -77,7 +127,8 @@ const Dashboard = ({ walletType }) => {
     } catch (error) { console.error("Error deleting transaction:", error); }
   };
 
-  // --- BOSS LOGIC FILTERING ---
+  // --- RESTORED BOSS FILTERING LOGIC ---
+  // I accidentally removed the "Strategy Loss" check. It is back now.
   const moneyIn = transactions.filter(t => 
     t.amount >= 0 && (!t.text || !t.text.includes('Strategy Loss'))
   );
@@ -87,7 +138,7 @@ const Dashboard = ({ walletType }) => {
   );
 
   return (
-    <div className="animate-fade-in max-w-7xl w-full pl-6">
+    <div className="animate-fade-in max-w-7xl w-full pl-6 mt-2">
 
       {/* HEADER */}
       <h1 className="text-4xl font-bold mb-2 text-white">

@@ -1,33 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose'); 
+const { requireAuth } = require('@clerk/express'); // <--- 1. IMPORT THE GUARD
 const Transaction = require('../models/Transaction');
 
 // Helper: Basic Sanitization
 const sanitize = (str) => {
   if (!str) return '';
-  return str
-    .trim()
-    .replace(/[<>"']/g, '') // Removes dangerous HTML characters
-    .substring(0, 200);
+  return str.trim().replace(/[<>"']/g, '').substring(0, 200);
 };
 
 // ==========================================
-// 1. STANDARD ROUTES
+// 1. STANDARD ROUTES (SECURED)
 // ==========================================
 
-router.get('/', async (req, res) => {
+// GET ALL TRANSACTIONS (Only for the logged-in user)
+router.get('/', requireAuth(), async (req, res) => { // <--- 2. ADD THE GUARD
   try {
-    const transactions = await Transaction.find().sort({ date: -1, createdAt: -1 });
+    const { userId } = req.auth; // <--- 3. GET USER ID FROM TOKEN
+    
+    // Find transactions ONLY for this user
+    const transactions = await Transaction.find({ userId }).sort({ date: -1, createdAt: -1 });
+    
     return res.status(200).json({ success: true, count: transactions.length, data: transactions });
   } catch (err) {
     return res.status(500).json({ success: false, error: 'Server Error' });
   }
 });
 
-router.post('/', async (req, res) => {
+// CREATE TRANSACTION (Stamped with User ID)
+router.post('/', requireAuth(), async (req, res) => {
   try {
-    // 1: ADD imageUrl TO THIS LIST
+    const { userId } = req.auth; // <--- GET USER ID
     const { amount, type, date, deductFromWallet, imageUrl } = req.body;
     
     const text = sanitize(req.body.text) || 'Untitled Transaction';
@@ -35,18 +39,20 @@ router.post('/', async (req, res) => {
     const wallet = sanitize(req.body.wallet) || 'personal';
 
     const mainTransaction = await Transaction.create({
+      userId, // <--- SAVE USER ID
       text,
       amount,
       type,
       category,
       wallet,
       date: date || new Date(),
-      imageUrl: imageUrl, // 2: SAVE IT TO DATABASE
+      imageUrl: imageUrl, 
       rootId: null
     });
 
     if (type === 'investment' && deductFromWallet === true) {
       await Transaction.create({
+        userId, // <--- SAVE USER ID HERE TOO
         text: `Transfer to ${text}`,
         amount: -Math.abs(amount),   
         type: 'expense',             
@@ -70,22 +76,24 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+// DELETE TRANSACTION (Only if you own it)
+router.delete('/:id', requireAuth(), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ success: false, error: 'Invalid ID format' });
     }
 
-    const transaction = await Transaction.findById(req.params.id);
-    if (!transaction) return res.status(404).json({ success: false, error: 'Not found' });
+    // Find transaction AND verify ownership
+    const transaction = await Transaction.findOne({ _id: req.params.id, userId: req.auth.userId });
+    
+    if (!transaction) return res.status(404).json({ success: false, error: 'Not found or unauthorized' });
     
     // --- 1. SMART SAFETY CHECK ---
-    // Only block deletion if there is a FUTURE investment (Rollover) depending on this.
-    // We do NOT block if the only child is just the "Transfer" receipt.
     const hasRollover = await Transaction.findOne({ 
       parentId: req.params.id, 
-      type: 'investment',   // Look for "Investment" children (The Chain)
-      status: 'active'      // (Optional: specifically active ones)
+      userId: req.auth.userId, // Check ownership
+      type: 'investment',   
+      status: 'active'      
     });
 
     if (hasRollover) {
@@ -96,9 +104,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     // --- 2. BULLETPROOF CLEANUP ---
-    // Delete ALL children (Transfers, Logs, etc.) by ID.
-    // This works even if you rename "Transfer" to "Pizza" in the future.
-    await Transaction.deleteMany({ parentId: transaction._id });
+    await Transaction.deleteMany({ parentId: transaction._id, userId: req.auth.userId });
 
     // --- 3. DELETE MAIN RECORD ---
     await transaction.deleteOne();
@@ -110,13 +116,13 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+// UPDATE TRANSACTION (Only if you own it)
+router.put('/:id', requireAuth(), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ success: false, error: 'Invalid ID format' });
     }
 
-    // 3: ALLOW imageUrl TO BE UPDATED
     const allowedUpdates = ['text', 'amount', 'wallet', 'category', 'date', 'imageUrl'];
     const updates = {};
     
@@ -130,11 +136,14 @@ router.put('/:id', async (req, res) => {
       }
     });
 
-    const updatedTransaction = await Transaction.findByIdAndUpdate(
-      req.params.id, updates, { new: true, runValidators: true }
+    // FIND AND UPDATE (With Ownership Check)
+    const updatedTransaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, userId: req.auth.userId }, // <--- OWNERSHIP CHECK
+      updates, 
+      { new: true, runValidators: true }
     );
     
-    if (!updatedTransaction) return res.status(404).json({ success: false, error: "Not found" });
+    if (!updatedTransaction) return res.status(404).json({ success: false, error: "Not found or unauthorized" });
     res.status(200).json({ success: true, data: updatedTransaction });
   } catch (err) {
     res.status(500).json({ success: false, error: "Server Error" });
@@ -142,25 +151,26 @@ router.put('/:id', async (req, res) => {
 });
 
 // ==========================================
-// 2. THE EXIT LOGIC (FINAL: NARRATIVE STYLE)
+// 2. THE EXIT LOGIC (SECURED)
 // ==========================================
 
-router.post('/withdraw', async (req, res) => {
+router.post('/withdraw', requireAuth(), async (req, res) => {
   try {
-    // 1. REMOVE 'imageUrl' from input (Frontend won't send it anymore)
+    const { userId } = req.auth; // <--- GET USER ID
     const { originalId, withdrawAmount, remainingAmount, totalValue } = req.body; 
 
     // VALIDATION
     if (!originalId || !mongoose.Types.ObjectId.isValid(originalId)) {
       return res.status(400).json({ success: false, error: 'Invalid Investment ID' });
     }
-    // Check Math (allow 1 cent variance)
     if (Math.abs((withdrawAmount + remainingAmount) - totalValue) > 0.01) {
        return res.status(400).json({ success: false, error: 'Math Error: Withdraw + Remaining must equal Total' });
     }
 
-    const original = await Transaction.findById(originalId);
-    if (!original) return res.status(404).json({ success: false, error: 'Investment not found' });
+    // Find Original (Verify Ownership)
+    const original = await Transaction.findOne({ _id: originalId, userId });
+    
+    if (!original) return res.status(404).json({ success: false, error: 'Investment not found or unauthorized' });
     
     if (original.status === 'closed') {
       return res.status(400).json({ success: false, error: 'Transaction Failed: This investment is already closed.' });
@@ -170,7 +180,6 @@ router.post('/withdraw', async (req, res) => {
     const originalPrincipal = Math.abs(original.amount);
     const isLoss = totalValue < originalPrincipal; 
     
-    // --- NARRATIVE LOGIC ---
     const valStory = `($${Math.round(originalPrincipal)} ➔ $${Math.round(totalValue)})`;
     
     let splitStory = '';
@@ -186,9 +195,10 @@ router.post('/withdraw', async (req, res) => {
     if (remainingAmount > 0) label = 'Strategy Yield';
     if (isLoss) label = 'Strategy Loss'; 
 
-    // --- 3. CREATE LOG (The Cash / Profit) ---
+    // --- 3. CREATE LOG (With userId) ---
     if (withdrawAmount > 0) {
       await Transaction.create({
+        userId, // <--- STAMP USER ID
         text: `${label}: ${logText}`,
         amount: Math.abs(withdrawAmount), 
         wallet: original.wallet,
@@ -197,8 +207,6 @@ router.post('/withdraw', async (req, res) => {
         date: new Date(), 
         rootId: rootReference,
         parentId: original._id,
-        
-        // FIX: No Receipt for "Cash Out" logs. 
         imageUrl: null 
       });
     }
@@ -208,12 +216,13 @@ router.post('/withdraw', async (req, res) => {
     original.currentValue = totalValue;
     await original.save();
 
-    // --- 5. CREATE ROLLOVER (The Remaining Asset) ---
+    // --- 5. CREATE ROLLOVER (With userId) ---
     if (remainingAmount > 0) {
       const originalSign = original.amount >= 0 ? 1 : -1;
       const newText = original.text.includes('(Cont.)') ? original.text : `${original.text} (Cont.)`;
       
       await Transaction.create({
+        userId, // <--- STAMP USER ID
         text: newText,
         amount: originalSign * Math.abs(remainingAmount), 
         wallet: original.wallet,
@@ -222,11 +231,8 @@ router.post('/withdraw', async (req, res) => {
         status: 'active',
         parentId: original._id,
         rootId: rootReference,
-        
-        // FIX: Stop Inheritance. New active card has NO receipt.
         imageUrl: null, 
-        
-        date: original.date // Keep original date for sorting
+        date: original.date 
       });
     }
 

@@ -1,30 +1,43 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useParams, Outlet, Navigate } from 'react-router-dom';
+import { SignIn, SignUp } from '@clerk/clerk-react';
+
+// Import your existing components
 import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import Dashboard from './pages/Dashboard';
 import InvestmentDetails from './pages/InvestmentDetails';
 
-// Helper to grab the ID from URL (e.g., /business -> walletId = 'business')
+// --- 1. HELPER COMPONENTS ---
+
 const WalletWrapper = () => {
   const { walletId } = useParams();
-  // We simply pass the ID to Dashboard. 
-  // Dashboard will use this ID to fetch the correct data from the backend.
   return <Dashboard walletType={walletId} />;
 };
 
+const SignInPage = () => (
+  <div className="flex justify-center items-center min-h-screen bg-[#0f172a]">
+    <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
+  </div>
+);
+
+const SignUpPage = () => (
+  <div className="flex justify-center items-center min-h-screen bg-[#0f172a]">
+    <SignUp path="/sign-up" routing="path" signInUrl="/sign-in" />
+  </div>
+);
+
+// --- 2. THE LAYOUT (Using Outlet) ---
 const Layout = () => {
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative">
-
       {/* HEADER */}
       <div className="relative z-50">
         <Header />
       </div>
 
       <div className="flex flex-1 max-w-8xl mx-auto w-full pt-23 pb-10 relative z-0">
-
         {/* SIDEBAR */}
         <aside className="hidden md:block w-20 flex-none relative z-40">
           <div className="sticky top-28 h-fit">
@@ -34,22 +47,7 @@ const Layout = () => {
 
         {/* MAIN CONTENT */}
         <main className="flex-1 px-6 min-h-[60vh] relative z-0">
-          <Routes>
-            {/* Route 1: Home (Personal Wallet) */}
-            <Route
-              path="/"
-              element={<Dashboard walletType="home" />}
-            />
-
-            {/* Route 2: Dynamic Wallets (Business, Travel, etc.) */}
-            <Route
-              path="/:walletId"
-              element={<WalletWrapper />}
-            />
-            
-            {/* Route 3: Investment Details */}
-            <Route path="/investment/:id" element={<InvestmentDetails />} />
-          </Routes>
+          <Outlet /> 
         </main>
       </div>
 
@@ -57,15 +55,31 @@ const Layout = () => {
       <div className="relative z-10 bg-[#0f172a] border-t border-white/5 mt-auto">
         <Footer />
       </div>
-
     </div>
   );
 };
 
+// --- 3. MAIN APP ---
 function App() {
   return (
     <Router>
-      <Layout />
+      <Routes>
+        {/* --- PUBLIC ROUTES (Login/Signup) --- */}
+        <Route path="/sign-in/*" element={<SignInPage />} />
+        <Route path="/sign-up/*" element={<SignUpPage />} />
+
+        {/* --- MAIN APP ROUTES (Now Publicly Accessible) --- */}
+        <Route element={<Layout />}>
+          {/* Anyone can see these pages now */}
+          <Route path="/" element={<Dashboard walletType="home" />} />
+          <Route path="/:walletId" element={<WalletWrapper />} />
+          <Route path="/investment/:id" element={<InvestmentDetails />} />
+        </Route>
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+        
+      </Routes>
     </Router>
   );
 }
