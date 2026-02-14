@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const cloudinary = require('../utils/cloudinary');
+const { requireAuth } = require('@clerk/express');
 
 // @route   GET /api/upload/signature
 // @desc    Get a signature to upload directly to Cloudinary from Frontend
 // @access  Public (or Private if you add middleware)
-router.get('/signature', (req, res) => {
+router.get('/signature', requireAuth(), (req, res) => {
   try {
     // 1. Define the parameters for the upload
     const timestamp = Math.round((new Date()).getTime() / 1000);

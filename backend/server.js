@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const uploadRoutes = require('./routes/uploadRoutes'); // Kept your original import
-
+const rateLimit = require('express-rate-limit');
 dotenv.config();
 
 const app = express();
@@ -12,9 +12,19 @@ const app = express();
 // 1. MIDDLEWARE (Security Fixes Added)
 // ==========================================
 
-// FIX #15: Limit Body Size to 10MB (Prevents server crashes from huge payloads)
+// Limit Body Size to 10MB (Prevents server crashes from huge payloads)
 app.use(express.json({ limit: '10mb' })); 
 app.use(cors());
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window (15 mins)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+
+app.use('/api', limiter);
 
 // ==========================================
 // 2. DATABASE CONNECTION (Retry Logic Added)
