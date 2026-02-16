@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, Outlet, Navigate } from 'react-router-dom';
 import { SignIn, SignUp } from '@clerk/clerk-react';
 
@@ -30,15 +30,24 @@ const SignUpPage = () => (
 
 // --- 2. THE LAYOUT (Using Outlet) ---
 const Layout = () => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative">
       {/* HEADER */}
       <div className="relative z-50">
-        <Header />
+        <Header toggleMobileMenu={toggleMobileMenu} isMobileMenuOpen={isMobileMenuOpen} />
       </div>
 
-      <div className="flex flex-1 max-w-8xl mx-auto w-full pt-23 pb-10 relative z-0">
-        {/* SIDEBAR */}
+      {/* SIDEBAR - Mobile (Overlay) - Outside main container for proper z-index */}
+      <Sidebar isMobile={true} isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+
+      <div className="flex flex-1 max-w-8xl mx-auto w-full pt-16 md:pt-23 pb-10 relative z-0">
+        {/* SIDEBAR - Desktop */}
         <aside className="hidden md:block w-20 flex-none relative z-40">
           <div className="sticky top-28 h-fit">
             <Sidebar />
@@ -46,13 +55,13 @@ const Layout = () => {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 px-6 min-h-[60vh] relative z-0">
+        <main className="flex-1 px-3 md:px-6 min-h-[60vh] relative z-0">
           <Outlet /> 
         </main>
       </div>
 
       {/* FOOTER */}
-      <div className="relative z-10 bg-[#0f172a] border-t border-white/5 mt-auto">
+      <div className="relative z-0 bg-[#0f172a] border-t border-white/5 mt-auto">
         <Footer />
       </div>
     </div>

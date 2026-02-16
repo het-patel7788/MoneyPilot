@@ -184,12 +184,12 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[99999] overflow-y-auto bg-black/60 backdrop-blur-sm">
-      <div className="flex min-h-full items-center justify-center p-4 text-center">
+      <div className="flex min-h-full items-end sm:items-center justify-center p-0 sm:p-4 text-center">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-md bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative text-left"
+          initial={{ opacity: 0, y: 50, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 50, scale: 0.95 }}
+          className="w-full max-w-md bg-[#0f172a] border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden relative text-left"
         >
           <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10">
             <X size={20} />
@@ -199,7 +199,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
             <h2 className="text-white font-bold">{editData ? 'Edit Transaction' : 'New Transaction'}</h2>
           </div>
 
-          <div className="flex border-b border-white/10 pr-12">
+          <div className="flex border-b border-white/10">
             {Object.keys(modes).map((modeKey) => {
               const mode = modes[modeKey];
               const isActive = type === modeKey;
@@ -208,9 +208,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
                   key={modeKey}
                   type="button"
                   onClick={() => setType(modeKey)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium transition-all duration-300 relative ${isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                  // RESPONSIVE: Smaller text and padding on mobile
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 md:py-4 text-xs md:text-sm font-medium transition-all duration-300 relative ${isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
                 >
-                  <mode.icon size={18} className={isActive ? mode.color : ''} />
+                  <mode.icon size={16} className={`md:w-[18px] md:h-[18px] ${isActive ? mode.color : ''}`} />
                   {mode.label}
                   {isActive && <motion.div layoutId="active-tab" className={`absolute bottom-0 left-0 right-0 h-0.5 ${mode.bg.replace('/10', '')}`} />}
                 </button>
@@ -218,7 +219,8 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
             })}
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* RESPONSIVE: p-4 on mobile, p-6 on desktop. Stacked grid on mobile. */}
+          <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 md:space-y-6">
             <div className="space-y-2">
               <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Amount</label>
               <div className={`relative flex items-center p-4 rounded-xl border ${currentMode.bg} ${currentMode.border}`}>
@@ -286,7 +288,8 @@ const AddTransactionModal = ({ isOpen, onClose, onSuccess, activeWallet, editDat
               )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* RESPONSIVE GRID: Stacked on mobile (grid-cols-1), Side-by-side on Desktop (md:grid-cols-2) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-slate-400">Date</label>
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-white/5 border border-white/10">
