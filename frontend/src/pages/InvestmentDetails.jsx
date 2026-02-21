@@ -20,6 +20,7 @@ const InvestmentDetails = () => {
     isProfit: false
   });
 
+  // --- LOGIC 100% UNTOUCHED ---
   useEffect(() => {
     const fetchDetails = async () => {
       try {
@@ -46,7 +47,6 @@ const InvestmentDetails = () => {
           .filter(t => t.type === 'income')
           .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
-        // --- THE FIX ---
         // We strictly use 'amount' for the active item because you are using the Daisy Chain logic.
         const activeItem = family.find(t => t.status !== 'closed' && (t.type === 'investment' || t.category === 'Investment'));
         const currentVal = activeItem ? Math.abs(activeItem.amount) : 0;
@@ -87,7 +87,7 @@ const InvestmentDetails = () => {
     };
 
     fetchDetails();
-  }, [id]);
+  }, [id, axios]); // Included axios in dependency array to be safe, standard practice
 
   if (loading) return (
     <div className="min-h-screen bg-[#020617] flex items-center justify-center">
@@ -102,68 +102,77 @@ const InvestmentDetails = () => {
       <div className="max-w-4xl mx-auto mb-8">
         <button 
           onClick={() => navigate(-1)} 
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6 group"
+          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6 group text-sm md:text-base"
         >
-          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
+          <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
         </button>
         
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 text-indigo-400">
-            <Activity size={32} />
+        <div className="flex items-start md:items-center gap-3 md:gap-4">
+          <div className="p-3 md:p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 text-indigo-400 shrink-0 mt-1 md:mt-0">
+            <Activity size={28} className="md:w-8 md:h-8" />
           </div>
-          <div>
-            <h1 className="text-3xl font-bold">Investment Ledger</h1>
-            <p className="text-slate-500 text-sm mt-1">Tracking ID: <span className="font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded">{id}</span></p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl md:text-3xl font-bold truncate">Investment Ledger</h1>
+            <p className="text-slate-500 text-xs md:text-sm mt-1 flex flex-wrap items-center gap-1.5">
+               <span>Tracking ID:</span> 
+               <span className="font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded truncate max-w-full block sm:inline">{id}</span>
+            </p>
           </div>
         </div>
       </div>
 
       {/* STATS GRID */}
-      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 mb-10 md:mb-12">
         
         {/* BOX 1: ORIGINAL PRINCIPAL */}
-        <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-indigo-500/20 transition-colors">
-           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Original Principal</p>
-           <p className="text-4xl font-bold text-white mt-2">${rootStats.invested.toLocaleString()}</p>
-           <div className="absolute -right-6 -bottom-6 text-slate-800 opacity-20 group-hover:opacity-30 transition-opacity"><DollarSign size={100} /></div>
+        <div className="bg-slate-900/50 p-5 md:p-6 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-indigo-500/20 transition-colors flex flex-col justify-center">
+           <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest relative z-10">Original Principal</p>
+           <p className="text-3xl md:text-4xl font-bold text-white mt-1 md:mt-2 relative z-10">${rootStats.invested.toLocaleString()}</p>
+           <div className="absolute -right-4 -bottom-4 md:-right-6 md:-bottom-6 text-slate-800 opacity-20 group-hover:opacity-30 transition-opacity">
+               <DollarSign size={80} className="md:w-[100px] md:h-[100px]" />
+           </div>
         </div>
 
-        {/* BOX 2: CURRENT STATUS */}
-        <div className={`bg-slate-900/50 p-6 rounded-2xl border relative overflow-hidden group transition-colors ${rootStats.isProfit ? 'border-emerald-500/20 hover:border-emerald-500/40' : 'border-rose-500/20 hover:border-rose-500/40'}`}>
-           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Current Status</p>
+        {/* BOX 2: CURRENT STATUS (Responsive Redesign) */}
+        <div className={`bg-slate-900/50 p-5 md:p-6 rounded-2xl border relative overflow-hidden group transition-colors flex flex-col justify-center ${rootStats.isProfit ? 'border-emerald-500/20 hover:border-emerald-500/40' : 'border-rose-500/20 hover:border-rose-500/40'}`}>
            
-           <div className="flex items-center">
+           {/* Top Row: Title & Badge (Fixed overlapping issue) */}
+           <div className="flex justify-between items-start mb-4 md:mb-6">
+               <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest mt-1">Current Status</p>
+               <div className={`px-2.5 py-1 rounded-lg text-[10px] md:text-xs font-bold border ${rootStats.isProfit ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                  Net: {rootStats.isProfit ? '+' : ''}${rootStats.netResult.toLocaleString()}
+               </div>
+           </div>
+           
+           {/* Bottom Row: Cash & Assets (Stacks cleanly on Mobile, Side-by-Side on Desktop) */}
+           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
               {/* Part A: Cash */}
-              <div className="pr-6 border-r border-white/10">
+              <div className="sm:pr-6 border-b sm:border-b-0 sm:border-r border-white/10 pb-4 sm:pb-0">
                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Cash Out</p>
-                 <p className="text-2xl font-bold text-emerald-400 flex items-center gap-1">
-                    <TrendingUp size={18} /> ${rootStats.returned.toLocaleString()}
+                 <p className="text-xl md:text-2xl font-bold text-emerald-400 flex items-center gap-1.5">
+                    <TrendingUp size={16} className="md:w-[18px] md:h-[18px]" /> ${rootStats.returned.toLocaleString()}
                  </p>
               </div>
 
               {/* Part B: Assets */}
-              <div className="pl-6">
+              <div className="sm:pl-6">
                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Active Assets</p>
-                 <p className="text-2xl font-bold text-blue-400 flex items-center gap-1">
-                    <Wallet size={18} /> ${rootStats.currentValue.toLocaleString()}
+                 <p className="text-xl md:text-2xl font-bold text-blue-400 flex items-center gap-1.5">
+                    <Wallet size={16} className="md:w-[18px] md:h-[18px]" /> ${rootStats.currentValue.toLocaleString()}
                  </p>
               </div>
            </div>
 
-           {/* Net Result Badge */}
-           <div className={`absolute top-6 right-6 px-3 py-1 rounded-lg text-xs font-bold border ${rootStats.isProfit ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-              Net: {rootStats.isProfit ? '+' : ''}${rootStats.netResult.toLocaleString()}
-           </div>
         </div>
       </div>
 
       {/* THE TIMELINE */}
       <div className="max-w-3xl mx-auto">
-        <h3 className="text-xl font-bold mb-8 border-b border-white/10 pb-4 flex items-center gap-2">
-            <Calendar size={20} className="text-indigo-400" /> Lifecycle Events
+        <h3 className="text-lg md:text-xl font-bold mb-6 md:mb-8 border-b border-white/10 pb-4 flex items-center gap-2">
+            <Calendar size={18} className="text-indigo-400 md:w-5 md:h-5" /> Lifecycle Events
         </h3>
         
-        <div className="space-y-0 relative border-l-2 border-slate-800 ml-4 md:ml-6 pb-10">
+        <div className="space-y-0 relative border-l-2 border-slate-800 ml-3 md:ml-6 pb-10">
           {history.map((tx, index) => {
             const isExit = tx.type === 'income';
             const isRoot = !tx.parentId;
@@ -199,13 +208,16 @@ const InvestmentDetails = () => {
             }
 
             return (
-              <div key={tx._id} className="relative pl-8 md:pl-12 py-4 first:pt-0">
-                <div className={`absolute -left-[9px] top-6 w-4 h-4 rounded-full border-4 border-[#020617] ${dotColor} z-10 transition-all`} />
+              <div key={tx._id} className="relative pl-6 md:pl-12 py-4 first:pt-0">
+                {/* Timeline Dot */}
+                <div className={`absolute -left-[9px] top-6 md:top-8 w-4 h-4 rounded-full border-4 border-[#020617] ${dotColor} z-10 transition-all`} />
 
-                <div className={`p-5 rounded-xl border ${borderColor} transition-all`}>
-                   <div className="flex justify-between items-start gap-4">
-                      <div>
-                         <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                <div className={`p-4 md:p-5 rounded-xl border ${borderColor} transition-all`}>
+                   
+                   {/* Mobile Responsive Flex Box */}
+                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-4">
+                      <div className="min-w-0">
+                         <p className={`text-[9px] md:text-[10px] font-bold uppercase tracking-widest mb-1 md:mb-1.5 ${
                              isExit ? (rootStats.isProfit ? 'text-emerald-400' : 'text-rose-400') 
                              : isRoot ? 'text-indigo-400' 
                              : isActive ? 'text-blue-400' 
@@ -213,24 +225,26 @@ const InvestmentDetails = () => {
                          }`}>
                             {title}
                          </p>
-                         <h4 className="text-white font-medium text-lg leading-tight">{tx.text}</h4>
-                         <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 font-mono">
+                         <h4 className="text-white font-medium text-base md:text-lg leading-tight break-words">{tx.text}</h4>
+                         <div className="flex items-center gap-3 mt-1.5 md:mt-2 text-[10px] md:text-xs text-slate-400 font-mono">
                             <span>{new Date(tx.date || Date.now()).toLocaleDateString()}</span>
                          </div>
                       </div>
 
-                      <div className="text-right shrink-0">
-                         <p className={`text-xl font-mono font-bold ${amountColor}`}>
+                      {/* Amount pushes to bottom on mobile, stays right on desktop */}
+                      <div className="text-left sm:text-right shrink-0 mt-2 sm:mt-0 pt-3 sm:pt-0 border-t border-white/5 sm:border-0">
+                         <p className={`text-lg md:text-xl font-mono font-bold ${amountColor}`}>
                             {isExit ? '+' : ''}${Math.abs(tx.amount).toLocaleString()}
                          </p>
                       </div>
                    </div>
 
+                   {/* View Receipt Button */}
                    {tx.imageUrl && (
                       <div className="mt-4 pt-4 border-t border-white/5">
                         <button 
                           onClick={() => setViewImage(tx.imageUrl)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#020617] border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-400 transition-all text-xs text-slate-400 font-bold uppercase tracking-wider"
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#020617] border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-400 transition-all text-xs text-slate-400 font-bold uppercase tracking-wider"
                         >
                            <FileText size={14} /> View Receipt
                         </button>
@@ -246,17 +260,17 @@ const InvestmentDetails = () => {
       {/* --- IMAGE POPUP MODAL (PORTAL) --- */}
       {viewImage && ReactDOM.createPortal(
         <div
-          className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200"
           onClick={() => setViewImage(null)}
         >
-          <button className="absolute top-8 right-8 text-slate-400 hover:text-white transition-colors bg-white/10 p-3 rounded-full hover:bg-white/20 z-50">
+          <button className="absolute top-6 right-6 md:top-8 md:right-8 text-slate-400 hover:text-white transition-colors bg-white/10 p-3 rounded-full hover:bg-white/20 z-50">
             <X size={24} />
           </button>
 
           <img
             src={viewImage}
             alt="Receipt"
-            className="max-w-full max-h-full rounded-lg shadow-2xl border border-white/10 object-contain"
+            className="max-w-full max-h-[85vh] rounded-lg shadow-2xl border border-white/10 object-contain"
             onClick={(e) => e.stopPropagation()}
           />
         </div>,

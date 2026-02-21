@@ -15,7 +15,6 @@ const InvestmentView = ({ transactions, walletType }) => {
   const activeRootIds = new Set(activeInvestments.map(t => t.rootId || t._id));
 
   // 2. FILTER ARCHIVE
-  // Only show closed investments if their Root ID is NOT in the active list.
   const closedInvestmentsRaw = transactions.filter(t => 
     (t.category === 'Investment' || t.type === 'investment') && t.status === 'closed'
   );
@@ -25,10 +24,9 @@ const InvestmentView = ({ transactions, walletType }) => {
     return !activeRootIds.has(root);
   });
 
-  // De-duplicate: If multiple closed items exist for one chain, just pick one to represent the row
+  // De-duplicate logic
   const uniqueClosed = [];
   const processedRoots = new Set();
-  // Sort newest first
   closedInvestments.sort((a, b) => new Date(b.date) - new Date(a.date));
   
   closedInvestments.forEach(t => {
@@ -50,71 +48,82 @@ const InvestmentView = ({ transactions, walletType }) => {
     window.location.reload(); 
   };
 
-  // --- SMART ARCHIVE ROW (CALCULATES FULL LIFECYCLE) ---
+  // --- THE PERFECTED ARCHIVE ROW ---
   const ClosedRow = ({ tx, allData }) => {
-    // 1. Find the entire family history for this closed item
     const rootId = tx.rootId || tx._id;
     const family = allData.filter(t => t._id === rootId || t.rootId === rootId);
 
-    // 2. Find Principal (Oldest Item)
-    // Sort by ID to find the true first record
     const sortedFamily = [...family].sort((a, b) => (a._id < b._id ? -1 : 1));
     const rootTx = sortedFamily[0];
     const originalPrincipal = rootTx ? Math.abs(rootTx.amount) : 0;
 
-    // 3. Calculate Total Cash Returned (Sum of all 'income')
     const totalReturned = family
       .filter(t => t.type === 'income')
       .reduce((acc, t) => acc + Math.abs(t.amount), 0);
 
-    // 4. Math
     const profit = totalReturned - originalPrincipal;
     const isProfit = profit >= 0;
     const percent = originalPrincipal > 0 ? ((profit / originalPrincipal) * 100).toFixed(0) : 0;
 
     return (
-      <div className="group bg-slate-900/50 border border-white/5 hover:border-white/10 p-4 rounded-xl flex items-center justify-between transition-all">
-        <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-full ${isProfit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                {isProfit ? <TrendingUp size={18} /> : <TrendingUp size={18} className="rotate-180" />}
+      <div className="group bg-slate-900/50 border border-white/5 hover:border-white/10 p-3 sm:p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition-all">
+        
+        {/* TOP/LEFT SECTION: Icon & Name & Mobile Actions */}
+        <div className="flex items-center justify-between w-full sm:w-auto">
+            <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className={`p-2.5 sm:p-3 rounded-full shrink-0 ${isProfit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                    {isProfit ? <TrendingUp size={16} /> : <TrendingUp size={16} className="rotate-180" />}
+                </div>
+                <div className="min-w-0">
+                    <h4 className="font-bold text-sm sm:text-base text-slate-200 truncate">{rootTx ? rootTx.text : tx.text}</h4>
+                    <p className="text-[10px] sm:text-xs text-slate-500 truncate mt-0.5">
+                        {new Date(rootTx ? rootTx.date : tx.date).toLocaleDateString()} • Mission Complete
+                    </p>
+                </div>
             </div>
-            <div>
-                {/* Show the Root Text (e.g., "Apple Stock") instead of the rollover text */}
-                <h4 className="font-bold text-slate-200">{rootTx ? rootTx.text : tx.text}</h4>
-                <p className="text-xs text-slate-500">
-                    {new Date(rootTx ? rootTx.date : tx.date).toLocaleDateString()} • Mission Complete
-                </p>
+            
+            {/* Mobile-Only Action Buttons */}
+            <div className="flex sm:hidden gap-1.5 shrink-0">
+                 {rootTx && rootTx.imageUrl && (
+                     <a href={rootTx.imageUrl} target="_blank" rel="noreferrer" className="p-1.5 bg-white/5 rounded-lg text-blue-400">
+                        <FileText size={14} />
+                     </a>
+                 )}
+                 <button onClick={() => navigate(`/investment/${rootId}`)} className="p-1.5 bg-white/5 rounded-lg text-purple-400">
+                    <Clock size={14} />
+                </button>
             </div>
         </div>
 
-        {/* THE TOTAL PERFORMANCE DISPLAY */}
-        <div className="text-right hidden sm:block">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1">Total Performance</p>
-            <div className="flex items-center justify-end gap-2 font-mono">
-                <span className="text-slate-400 font-bold">${originalPrincipal}</span>
-                <ArrowRight size={14} className="text-slate-600" />
-                <span className={`font-bold text-lg ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    ${totalReturned}
+        {/* BOTTOM/RIGHT SECTION: Performance Math */}
+        <div className="w-full sm:w-auto border-t border-white/5 pt-2.5 sm:border-0 sm:pt-0 flex items-center justify-between sm:justify-end gap-4">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold sm:hidden">Return</span>
+            
+            <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs sm:text-sm">
+                <span className="text-slate-400 font-bold">${originalPrincipal.toLocaleString()}</span>
+                <ArrowRight size={12} className="text-slate-600 sm:w-[14px] sm:h-[14px]" />
+                <span className={`font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    ${totalReturned.toLocaleString()}
+                </span>
+                <span className={`font-bold ml-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] ${isProfit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                    {isProfit ? '+' : ''}{percent}%
                 </span>
             </div>
-            <p className={`text-xs ${isProfit ? 'text-emerald-500/70' : 'text-rose-500/70'} font-bold`}>
-                {isProfit ? '+' : ''}{percent}% Return
-            </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Desktop-Only Action Buttons */}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
             {rootTx && rootTx.imageUrl && (
                  <a 
                    href={rootTx.imageUrl} 
                    target="_blank" 
                    rel="noreferrer"
                    className="p-2 bg-white/5 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
-                   title="View Original Buy Receipt"
+                   title="View Receipt"
                  >
                     <FileText size={16} />
                  </a>
             )}
-            
             <button 
                 onClick={() => navigate(`/investment/${rootId}`)}
                 className="p-2 bg-white/5 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors" 
@@ -128,63 +137,81 @@ const InvestmentView = ({ transactions, walletType }) => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto pb-20 relative">
+    // Note: Removed px-4 here because App.jsx handles global padding. Max-width constraints ensure it stays centered on laptops.
+    <div className="w-full max-w-4xl mx-auto pb-24 relative">
       
       {/* HEADER */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-3 mb-6 sm:mb-8">
         <Link 
           to={getBackLink()} 
-          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+          className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all shrink-0"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
         </Link>
-        <div>
-           <h2 className="text-2xl font-bold text-white">Investment Portfolio</h2>
-           <p className="text-slate-400 text-sm">Active Positions & Tactics</p>
+        <div className="min-w-0">
+           <h2 className="text-xl sm:text-2xl font-bold text-white truncate">Investment Portfolio</h2>
+           <p className="text-slate-400 text-xs sm:text-sm truncate">Active Positions & Tactics</p>
         </div>
       </div>
 
-      {/* STATS CARD */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/20 shadow-2xl relative overflow-hidden">
-           <div className="absolute top-0 right-0 p-4 opacity-20"><TrendingUp size={100} /></div>
-           <p className="text-indigo-300 text-sm font-medium uppercase tracking-wider mb-1">Active Capital Deployed</p>
-           <h3 className="text-4xl font-bold text-white drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-             ${totalInvested.toLocaleString()}
-           </h3>
+      {/* --- RESTORED: PREMIUM STATS CARD GRID --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8">
+        {/* Left Side: Capital Deployed */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/20 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+           <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><TrendingUp size={100} /></div>
+           
+           <div>
+               <p className="text-indigo-300 text-xs sm:text-sm font-medium uppercase tracking-wider mb-1">Active Capital Deployed</p>
+               <h3 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                 ${totalInvested.toLocaleString()}
+               </h3>
+           </div>
+           
+           {/* Upgraded Badges (Instead of floating loose text) */}
+           <div className="flex gap-3 mt-5 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
+               <div className="bg-indigo-500/20 text-indigo-300 px-3 py-1.5 rounded-lg border border-indigo-500/30">
+                   {activeInvestments.length} Active
+               </div>
+               <div className="bg-slate-900/50 text-slate-400 px-3 py-1.5 rounded-lg border border-white/5">
+                   {uniqueClosed.length} Closed
+               </div>
+           </div>
         </div>
-        <div className="p-6 rounded-2xl bg-[#0f172a] border border-white/5 flex items-center justify-center text-slate-500 border-dashed">
+        
+        {/* Right Side: Pie Chart Placeholder (Desktop Only) */}
+        <div className="hidden md:flex p-6 rounded-2xl bg-[#0f172a] border border-white/5 items-center justify-center text-slate-500 border-dashed">
            <div className="text-center">
-             <PieChart size={32} className="mx-auto mb-2 opacity-50" />
+             <PieChart size={32} className="mx-auto mb-3 opacity-50" />
              <p className="text-sm">Allocation Chart Coming Soon</p>
            </div>
         </div>
       </div>
 
-      {/* TABS */}
-      <div className="flex items-center gap-4 border-b border-white/10 mb-6">
+      {/* --- SCROLLABLE TABS --- */}
+      <div className="flex items-center gap-2 sm:gap-4 border-b border-white/10 mb-6 overflow-x-auto no-scrollbar">
         <button 
             onClick={() => setActiveTab('active')}
-            className={`pb-4 px-2 text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'active' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`pb-3 sm:pb-4 px-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeTab === 'active' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}
         >
-            <Swords size={16} /> Active Battles ({activeInvestments.length})
+            <Swords size={14} className="sm:w-4 sm:h-4" /> Active
         </button>
 
         <button 
             onClick={() => setActiveTab('closed')}
-            className={`pb-4 px-2 text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'closed' ? 'text-slate-200 border-b-2 border-slate-500' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`pb-3 sm:pb-4 px-3 text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${activeTab === 'closed' ? 'text-slate-200 border-b-2 border-slate-500' : 'text-slate-500 hover:text-slate-300'}`}
         >
-            <Archive size={16} /> War Archive ({uniqueClosed.length})
+            <Archive size={14} className="sm:w-4 sm:h-4" /> Closed  
         </button>
       </div>
 
       {/* LISTS */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* ACTIVE LIST */}
         {activeTab === 'active' && (
              activeInvestments.length === 0 ? (
-                <div className="text-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl">
-                    <p>No active investments.</p>
+                <div className="flex flex-col items-center justify-center py-16 border border-dashed border-white/10 rounded-2xl text-slate-500">
+                    <Swords size={24} className="mb-2 opacity-40" />
+                    <p className="text-sm">No active investments.</p>
                 </div>
               ) : (
                 activeInvestments.map(inv => (
@@ -201,16 +228,17 @@ const InvestmentView = ({ transactions, walletType }) => {
         {/* CLOSED LIST */}
         {activeTab === 'closed' && (
              uniqueClosed.length === 0 ? (
-                <div className="text-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl">
-                    <p>No closed investments yet.</p>
+                <div className="flex flex-col items-center justify-center py-16 border border-dashed border-white/10 rounded-2xl text-slate-500">
+                    <Archive size={24} className="mb-2 opacity-40" />
+                    <p className="text-sm">No closed investments yet.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 sm:space-y-4">
                     {uniqueClosed.map(inv => (
                         <ClosedRow 
                           key={inv._id} 
                           tx={inv} 
-                          allData={transactions} // <--- PASS ALL DATA FOR CALCULATIONS
+                          allData={transactions} 
                         />
                     ))}
                 </div>

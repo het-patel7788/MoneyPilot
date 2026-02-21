@@ -37,7 +37,7 @@ const Layout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative">
+    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col relative overflow-x-hidden">
       {/* HEADER */}
       <div className="relative z-50">
         <Header toggleMobileMenu={toggleMobileMenu} isMobileMenuOpen={isMobileMenuOpen} />
@@ -46,7 +46,7 @@ const Layout = () => {
       {/* SIDEBAR - Mobile (Overlay) - Outside main container for proper z-index */}
       <Sidebar isMobile={true} isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
 
-      <div className="flex flex-1 max-w-8xl mx-auto w-full pt-16 md:pt-23 pb-10 relative z-0">
+      <div className="flex flex-1 w-full min-w-0 pt-16 md:pt-20 pb-10 relative z-0">
         {/* SIDEBAR - Desktop */}
         <aside className="hidden md:block w-20 flex-none relative z-40">
           <div className="sticky top-28 h-fit">
@@ -55,8 +55,8 @@ const Layout = () => {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 px-3 md:px-6 min-h-[60vh] relative z-0">
-          <Outlet /> 
+        <main className="flex-1 min-w-0 px-3 md:px-6 min-h-[60vh] relative z-0 overflow-x-hidden">
+          <Outlet />
         </main>
       </div>
 

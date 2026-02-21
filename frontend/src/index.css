@@ -24,6 +24,7 @@ body {
   -webkit-font-smoothing: antialiased;
   /* This is antialiased */
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;  /* prevent horizontal scroll on mobile */
 }
 
 /* --- REMOVE UGLY NUMBER SPINNERS --- */

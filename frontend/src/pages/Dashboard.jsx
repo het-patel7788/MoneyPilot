@@ -170,7 +170,7 @@ const Dashboard = ({ walletType }) => {
   }
 
   return (
-    <div className="animate-fade-in max-w-7xl w-full pl-0 md:pl-6 mt-2">
+    <div className="animate-fade-in w-full min-w-0 overflow-x-hidden pl-0 md:pl-6 mt-2">
 
       {/* HEADER */}
       <h1 className="text-3xl md:text-4xl font-bold mb-2 text-white">
